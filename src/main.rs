@@ -10,17 +10,12 @@ use crate::app::Model;
 #[derive(Debug, PartialEq)]
 pub enum Msg {
     AppClose,
-    DigitCounterChanged(isize),
-    DigitCounterBlur,
-    LetterCounterChanged(isize),
-    LetterCounterBlur,
+    Focus(Id),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum Id {
     Header,
-    DigitCounter,
-    LetterCounter,
     Label,
 }
 
@@ -32,9 +27,7 @@ fn main() {
     while !model.quit {
         match model.app.tick(PollStrategy::Once) {
             Err(err) => {
-                let _ = model.terminal.leave_alternate_screen();
-                let _ = model.terminal.disable_raw_mode();
-                let _ = model.terminal.clear_screen();
+                model.terminate();
                 panic!("Application error: {}", err);
             }
             Ok(messages) if messages.len() > 0 => {
@@ -56,7 +49,5 @@ fn main() {
         }
     }
 
-    let _ = model.terminal.leave_alternate_screen();
-    let _ = model.terminal.disable_raw_mode();
-    let _ = model.terminal.clear_screen();
+    model.terminate();
 }

@@ -1,4 +1,6 @@
 use tui_realm_stdlib::Container;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{Alignment, Color};
 use tuirealm::{Component, Event, MockComponent, NoUserEvent};
 
@@ -21,7 +23,17 @@ impl Default for Header {
 }
 
 impl Component<Msg, NoUserEvent> for Header {
-    fn on(&mut self, _: Event<NoUserEvent>) -> Option<Msg> {
-        None
+    fn on(&mut self, ev: Event<NoUserEvent>) -> Option<Msg> {
+        let cmd = match ev {
+            Event::Keyboard(KeyEvent {
+                code: Key::Esc,
+                modifiers: KeyModifiers::NONE,
+            }) => return Some(Msg::AppClose),
+            _ => Cmd::None,
+        };
+
+        match self.perform(cmd) {
+            _ => None,
+        }
     }
 }

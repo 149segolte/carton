@@ -90,6 +90,12 @@ impl Model {
         assert!(app.active(&Id::Header).is_ok());
         app
     }
+
+    pub fn terminate(&mut self) {
+        let _ = self.terminal.leave_alternate_screen();
+        let _ = self.terminal.disable_raw_mode();
+        let _ = self.terminal.clear_screen();
+    }
 }
 
 impl Update<Msg> for Model {
@@ -103,36 +109,15 @@ impl Update<Msg> for Model {
                     self.quit = true; // Terminate
                     None
                 }
-                Msg::DigitCounterBlur => {
-                    // Give focus to letter counter
-                    assert!(self.app.active(&Id::LetterCounter).is_ok());
-                    None
-                }
-                Msg::DigitCounterChanged(v) => {
+                Msg::Focus(id) => {
+                    assert!(self.app.active(&id).is_ok());
                     // Update label
                     assert!(self
                         .app
                         .attr(
                             &Id::Label,
                             Attribute::Text,
-                            AttrValue::String(format!("DigitCounter has now value: {}", v))
-                        )
-                        .is_ok());
-                    None
-                }
-                Msg::LetterCounterBlur => {
-                    // Give focus to digit counter
-                    assert!(self.app.active(&Id::DigitCounter).is_ok());
-                    None
-                }
-                Msg::LetterCounterChanged(v) => {
-                    // Update label
-                    assert!(self
-                        .app
-                        .attr(
-                            &Id::Label,
-                            Attribute::Text,
-                            AttrValue::String(format!("LetterCounter has now value: {}", v))
+                            AttrValue::String(format!("Focus changed to: {:?}", id))
                         )
                         .is_ok());
                     None
