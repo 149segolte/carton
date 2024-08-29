@@ -3,7 +3,6 @@ use tuirealm::Update;
 
 mod app;
 mod components;
-mod utils;
 
 use crate::app::Model;
 
