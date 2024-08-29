@@ -10,6 +10,7 @@ use crate::app::Model;
 pub enum Msg {
     AppClose,
     Focus(Id),
+    Input(Id, String),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]

@@ -1,5 +1,5 @@
 use tui_realm_stdlib::Input;
-use tuirealm::command::{Cmd, Direction, Position};
+use tuirealm::command::{Cmd, CmdResult, Direction, Position};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, InputType, Style};
 use tuirealm::{Component, Event, MockComponent, NoUserEvent};
@@ -9,6 +9,7 @@ use crate::{Id, Msg};
 #[derive(MockComponent)]
 pub struct TextInput {
     component: Input,
+    id: Option<Id>,
     link: Option<Id>,
 }
 
@@ -24,6 +25,7 @@ impl Default for TextInput {
                 .foreground(Color::LightYellow)
                 .input_type(InputType::Text)
                 .invalid_style(Style::default().fg(Color::Red)),
+            id: None,
             link: None,
         }
     }
@@ -35,6 +37,7 @@ impl TextInput {
     }
 
     pub fn customize(mut self, id: Id) -> Self {
+        self.id = Some(id.clone());
         match id {
             Id::TextInput1 => {
                 self.component = self.component.title(" Name ", Alignment::Left);
@@ -90,7 +93,12 @@ impl Component<Msg, NoUserEvent> for TextInput {
             _ => Cmd::None,
         };
 
-        self.perform(cmd);
-        None
+        match self.perform(cmd) {
+            CmdResult::Changed(state) => Some(Msg::Input(
+                self.id.clone().unwrap(),
+                state.unwrap_one().unwrap_string(),
+            )),
+            _ => None,
+        }
     }
 }

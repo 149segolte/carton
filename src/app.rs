@@ -1,28 +1,36 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::time::Duration;
 
 use tuirealm::event::NoUserEvent;
 use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
-use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
+use tuirealm::{
+    Application, AttrValue, Attribute, EventListenerCfg, Sub, SubClause, SubEventClause, Update,
+};
 
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
-use crate::components::paragraph::{Header, Preview};
+use crate::components::paragraph::{Header, Preview, PreviewDataTypes};
 use crate::{Id, Msg};
 
 pub struct Model {
     pub app: Application<Id, Msg, NoUserEvent>,
     pub quit: bool,
     pub redraw: bool,
+    pub data: HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
     pub terminal: TerminalBridge,
 }
 
 impl Default for Model {
     fn default() -> Self {
+        let (app, data) = Self::init_app();
         Self {
-            app: Self::init_app(),
+            app,
             quit: false,
             redraw: true,
+            data,
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
@@ -75,11 +83,23 @@ impl Model {
             .is_ok());
     }
 
-    fn init_app() -> Application<Id, Msg, NoUserEvent> {
-        // Setup application
-        // NOTE: NoUserEvent is a shorthand to tell tui-realm we're not going to use any custom user event
-        // NOTE: the event listener is configured to use the default crossterm input listener and to raise a Tick event each second
-        // which we will use to update the clock
+    fn init_app() -> (
+        Application<Id, Msg, NoUserEvent>,
+        HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
+    ) {
+        let mut data = HashMap::default();
+        data.insert(
+            PreviewDataTypes::Name,
+            Rc::new(RefCell::new("test-instance".to_string())),
+        );
+        data.insert(
+            PreviewDataTypes::Region,
+            Rc::new(RefCell::new("us-west-1".to_string())),
+        );
+        data.insert(
+            PreviewDataTypes::Image,
+            Rc::new(RefCell::new("ubuntu-20.04".to_string())),
+        );
 
         let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
             EventListenerCfg::default()
@@ -95,7 +115,15 @@ impl Model {
 
         // Mount UI
         assert!(app
-            .mount(Id::Preview, Box::new(Preview::default()), Vec::default())
+            .mount(
+                Id::Preview,
+                Box::new(Preview::new(
+                    data.get_mut(&PreviewDataTypes::Name).unwrap().clone(),
+                    data.get_mut(&PreviewDataTypes::Region).unwrap().clone(),
+                    data.get_mut(&PreviewDataTypes::Image).unwrap().clone(),
+                )),
+                vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
+            )
             .is_ok());
         assert!(app
             .mount(
@@ -126,7 +154,7 @@ impl Model {
 
         // Active Header
         assert!(app.active(&Id::Header).is_ok());
-        app
+        (app, data)
     }
 
     pub fn terminate(&mut self) {
@@ -156,6 +184,49 @@ impl Update<Msg> for Model {
                             &Id::Label,
                             Attribute::Text,
                             AttrValue::String(format!("Focus changed to: {:?}", id))
+                        )
+                        .is_ok());
+                    None
+                }
+                Msg::Input(id, input) => {
+                    match id {
+                        Id::TextInput1 => {
+                            let mut x = self
+                                .data
+                                .get_mut(&PreviewDataTypes::Name)
+                                .unwrap()
+                                .borrow_mut();
+                            x.clear();
+                            x.push_str(input.as_str());
+                        }
+                        Id::TextInput2 => {
+                            let mut x = self
+                                .data
+                                .get_mut(&PreviewDataTypes::Region)
+                                .unwrap()
+                                .borrow_mut();
+                            x.clear();
+                            x.push_str(input.as_str());
+                        }
+                        Id::TextInput3 => {
+                            let mut x = self
+                                .data
+                                .get_mut(&PreviewDataTypes::Image)
+                                .unwrap()
+                                .borrow_mut();
+                            x.clear();
+                            x.push_str(input.as_str());
+                        }
+                        _ => {}
+                    }
+
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String(format!("Input from {:?}: {:?}", id, input))
                         )
                         .is_ok());
                     None
