@@ -100,21 +100,21 @@ impl Model {
         assert!(app
             .mount(
                 Id::TextInput1,
-                Box::new(TextInput::new(Id::TextInput2)),
+                Box::new(TextInput::new(Id::TextInput1, Id::TextInput2)),
                 Vec::default()
             )
             .is_ok());
         assert!(app
             .mount(
                 Id::TextInput2,
-                Box::new(TextInput::new(Id::TextInput3)),
+                Box::new(TextInput::new(Id::TextInput2, Id::TextInput3)),
                 Vec::default()
             )
             .is_ok());
         assert!(app
             .mount(
                 Id::TextInput3,
-                Box::new(TextInput::new(Id::Header)),
+                Box::new(TextInput::new(Id::TextInput3, Id::Header)),
                 Vec::default()
             )
             .is_ok());
