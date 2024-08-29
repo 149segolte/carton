@@ -16,6 +16,10 @@ pub enum Msg {
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum Id {
     Header,
+    TextInput1,
+    TextInput2,
+    TextInput3,
+    Preview,
     Label,
 }
 
@@ -30,7 +34,7 @@ fn main() {
                 model.terminate();
                 panic!("Application error: {}", err);
             }
-            Ok(messages) if messages.len() > 0 => {
+            Ok(messages) if !messages.is_empty() => {
                 // NOTE: redraw if at least one msg has been processed
                 model.redraw = true;
                 for msg in messages.into_iter() {

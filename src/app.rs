@@ -1,13 +1,13 @@
 use std::time::Duration;
 
 use tuirealm::event::NoUserEvent;
-use tuirealm::props::{Alignment, Color, TextModifiers};
 use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
 use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
 
-use crate::components::container::Header;
-use crate::components::label::Label;
+use crate::components::input::TextInput;
+use crate::components::label::TextLabel;
+use crate::components::paragraph::{Header, Preview};
 use crate::{Id, Msg};
 
 pub struct Model {
@@ -39,7 +39,7 @@ impl Model {
                     .margin(0)
                     .constraints(
                         [
-                            Constraint::Length(8), // Container
+                            Constraint::Length(8), // Header
                             Constraint::Fill(1),   // UI
                             Constraint::Length(1), // Label
                         ]
@@ -48,6 +48,29 @@ impl Model {
                     .split(f.size());
                 self.app.view(&Id::Header, f, chunks[0]);
                 self.app.view(&Id::Label, f, chunks[2]);
+
+                let ui_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .margin(0)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                    .split(chunks[1]);
+                self.app.view(&Id::Preview, f, ui_chunks[1]);
+
+                let input_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(0)
+                    .constraints(
+                        [
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(ui_chunks[0]);
+                self.app.view(&Id::TextInput1, f, input_chunks[0]);
+                self.app.view(&Id::TextInput2, f, input_chunks[1]);
+                self.app.view(&Id::TextInput3, f, input_chunks[2]);
             })
             .is_ok());
     }
@@ -70,20 +93,35 @@ impl Model {
             .mount(Id::Header, Box::new(Header::default()), Vec::default())
             .is_ok());
 
-        // Mount Message label
+        // Mount UI
+        assert!(app
+            .mount(Id::Preview, Box::new(Preview::default()), Vec::default())
+            .is_ok());
         assert!(app
             .mount(
-                Id::Label,
-                Box::new(
-                    Label::default()
-                        .text("Waiting for a Msg...")
-                        .alignment(Alignment::Left)
-                        .background(Color::Reset)
-                        .foreground(Color::LightYellow)
-                        .modifiers(TextModifiers::BOLD),
-                ),
-                Vec::default(),
+                Id::TextInput1,
+                Box::new(TextInput::new(Id::TextInput2)),
+                Vec::default()
             )
+            .is_ok());
+        assert!(app
+            .mount(
+                Id::TextInput2,
+                Box::new(TextInput::new(Id::TextInput3)),
+                Vec::default()
+            )
+            .is_ok());
+        assert!(app
+            .mount(
+                Id::TextInput3,
+                Box::new(TextInput::new(Id::Header)),
+                Vec::default()
+            )
+            .is_ok());
+
+        // Mount Message label
+        assert!(app
+            .mount(Id::Label, Box::new(TextLabel::default()), Vec::default(),)
             .is_ok());
 
         // Active Header
