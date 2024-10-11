@@ -7,7 +7,7 @@ use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, Color, PropPayload, PropValue, TextSpan};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent, NoUserEvent};
 
-use crate::{Id, Msg};
+use crate::constants::{Id, Msg};
 
 #[derive(MockComponent)]
 pub struct Header {
@@ -49,6 +49,7 @@ impl Component<Msg, NoUserEvent> for Header {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PreviewDataTypes {
+    Servers,
     Name,
     Region,
     Image,
@@ -57,6 +58,7 @@ pub enum PreviewDataTypes {
 #[derive(MockComponent)]
 pub struct Preview {
     component: Paragraph,
+    servers: Option<Rc<RefCell<String>>>,
     name: Option<Rc<RefCell<String>>>,
     region: Option<Rc<RefCell<String>>>,
     image: Option<Rc<RefCell<String>>>,
@@ -69,6 +71,7 @@ impl Default for Preview {
                 .background(Color::Reset)
                 .foreground(Color::Reset)
                 .title(" Preview ", Alignment::Left),
+            servers: None,
             name: None,
             region: None,
             image: None,
@@ -78,11 +81,13 @@ impl Default for Preview {
 
 impl Preview {
     pub fn new(
+        servers: Rc<RefCell<String>>,
         name: Rc<RefCell<String>>,
         region: Rc<RefCell<String>>,
         image: Rc<RefCell<String>>,
     ) -> Self {
         let mut s = Self::default();
+        s.servers = Some(servers);
         s.name = Some(name);
         s.region = Some(region);
         s.image = Some(image);
@@ -95,30 +100,22 @@ impl Preview {
             Attribute::Text,
             AttrValue::Payload(PropPayload::Vec(
                 [
-                    TextSpan::new(
-                        "https://compute.googleapis.com/compute/v1/projects/segolte-dev/instances",
-                    ),
-                    TextSpan::new(""),
-                    TextSpan::new("POST"),
-                    TextSpan::new(""),
-                    TextSpan::new("Authorization: Bearer <Access Token>"),
-                    TextSpan::new("Content-Type: application/json"),
-                    TextSpan::new(""),
-                    TextSpan::new("{"),
-                    TextSpan::new("    \"machineType\": \"/machineTypes/n1-standard-1\","),
                     TextSpan::new(format!(
-                        "    \"name\": \"{}\",",
+                        "servers: {}",
+                        self.servers.as_ref().unwrap().as_ref().borrow()
+                    )),
+                    TextSpan::new(format!(
+                        "name: {}",
                         self.name.as_ref().unwrap().as_ref().borrow()
                     )),
                     TextSpan::new(format!(
-                        "    \"region\": \"/zone/{}\",",
+                        "region: /zone/{}",
                         self.region.as_ref().unwrap().as_ref().borrow()
                     )),
                     TextSpan::new(format!(
-                        "    \"image\": \"/images/{}\",",
+                        "image: /images/{}",
                         self.image.as_ref().unwrap().as_ref().borrow()
                     )),
-                    TextSpan::new("}"),
                 ]
                 .iter()
                 .cloned()

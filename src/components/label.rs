@@ -2,7 +2,7 @@ use tui_realm_stdlib::Label;
 use tuirealm::props::{Alignment, Color, TextModifiers};
 use tuirealm::{Component, Event, MockComponent, NoUserEvent};
 
-use crate::Msg;
+use crate::constants::Msg;
 
 #[derive(MockComponent)]
 pub struct TextLabel {

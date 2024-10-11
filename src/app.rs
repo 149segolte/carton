@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
+use hcloud::apis::configuration::Configuration;
+use hcloud::apis::servers_api;
 use tuirealm::event::NoUserEvent;
 use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
@@ -13,12 +15,13 @@ use tuirealm::{
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
 use crate::components::paragraph::{Header, Preview, PreviewDataTypes};
-use crate::{Id, Msg};
+use crate::constants::{AuthPlatform, Id, Msg};
 
 pub struct Model {
     pub app: Application<Id, Msg, NoUserEvent>,
     pub quit: bool,
     pub redraw: bool,
+    pub uniforms: HashMap<String, String>,
     pub data: HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
     pub terminal: TerminalBridge,
 }
@@ -30,6 +33,7 @@ impl Default for Model {
             app,
             quit: false,
             redraw: true,
+            uniforms: HashMap::new(),
             data,
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
@@ -37,6 +41,29 @@ impl Default for Model {
 }
 
 impl Model {
+    pub fn new(auth: AuthPlatform, token: String) -> Self {
+        let mut obj = Self::default();
+        obj.uniforms.insert("auth".to_string(), auth.to_string());
+        obj.uniforms.insert("token".to_string(), token.clone());
+
+        let mut configuration = Configuration::new();
+        configuration.bearer_access_token = Some(token);
+
+        let servers = futures::executor::block_on(servers_api::list_servers(
+            &configuration,
+            Default::default(),
+        ))
+        .unwrap()
+        .servers;
+
+        obj.data.insert(
+            PreviewDataTypes::Servers,
+            Rc::new(RefCell::new(format!("{:?}", servers))),
+        );
+
+        obj
+    }
+
     pub fn view(&mut self) {
         assert!(self
             .terminal
@@ -89,6 +116,10 @@ impl Model {
     ) {
         let mut data = HashMap::default();
         data.insert(
+            PreviewDataTypes::Servers,
+            Rc::new(RefCell::new("".to_string())),
+        );
+        data.insert(
             PreviewDataTypes::Name,
             Rc::new(RefCell::new("test-instance".to_string())),
         );
@@ -118,6 +149,7 @@ impl Model {
             .mount(
                 Id::Preview,
                 Box::new(Preview::new(
+                    data.get_mut(&PreviewDataTypes::Servers).unwrap().clone(),
                     data.get_mut(&PreviewDataTypes::Name).unwrap().clone(),
                     data.get_mut(&PreviewDataTypes::Region).unwrap().clone(),
                     data.get_mut(&PreviewDataTypes::Image).unwrap().clone(),
@@ -170,7 +202,7 @@ impl Update<Msg> for Model {
             // Set redraw
             self.redraw = true;
             // Match message
-            match msg {
+            let res = match msg {
                 Msg::AppClose => {
                     self.quit = true; // Terminate
                     None
@@ -231,7 +263,19 @@ impl Update<Msg> for Model {
                         .is_ok());
                     None
                 }
-            }
+            };
+            assert!(self
+                .app
+                .attr(
+                    &Id::Label,
+                    Attribute::Text,
+                    AttrValue::String(format!(
+                        "Debug: {} {}",
+                        self.uniforms["auth"], self.uniforms["token"]
+                    ))
+                )
+                .is_ok());
+            return res;
         } else {
             None
         }

@@ -1,30 +1,16 @@
-use tuirealm::application::PollStrategy;
-use tuirealm::Update;
+use clap::Parser;
+use tuirealm::{application::PollStrategy, Update};
 
 mod app;
 mod components;
+mod constants;
 
 use crate::app::Model;
 
-#[derive(Debug, PartialEq)]
-pub enum Msg {
-    AppClose,
-    Focus(Id),
-    Input(Id, String),
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
-pub enum Id {
-    Header,
-    TextInput1,
-    TextInput2,
-    TextInput3,
-    Preview,
-    Label,
-}
-
 fn main() {
-    let mut model = Model::default();
+    let args = constants::Args::parse();
+
+    let mut model = Model::new(args.auth, args.token);
     let _ = model.terminal.enter_alternate_screen();
     let _ = model.terminal.enable_raw_mode();
 

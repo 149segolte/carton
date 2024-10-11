@@ -4,7 +4,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, InputType, Style};
 use tuirealm::{Component, Event, MockComponent, NoUserEvent};
 
-use crate::{Id, Msg};
+use crate::constants::{Id, Msg};
 
 #[derive(MockComponent)]
 pub struct TextInput {
