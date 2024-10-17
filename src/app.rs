@@ -12,36 +12,36 @@ use tuirealm::{
 };
 use uuid::Uuid;
 
-use crate::async_utils::Runner;
+use crate::async_utils::{Runner, Task, TaskNames};
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
-use crate::components::paragraph::{Header, Preview, PreviewDataTypes};
+use crate::components::paragraph::{Header, HeaderOverview, Preview, PreviewDataTypes};
 use crate::constants::{AuthPlatform, Id, Msg};
 
 pub struct Model {
     pub app: Application<Id, Msg, NoUserEvent>,
     pub quit: bool,
     pub redraw: bool,
-    pub uniforms: HashMap<String, String>,
+    pub uniforms: HashMap<String, Rc<RefCell<String>>>,
     pub data: HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
     pub runner: Option<Runner>,
-    pub queue: Option<Rc<RefCell<Vec<Uuid>>>>,
+    pub queue: Vec<Uuid>,
     test: String,
     pub terminal: TerminalBridge,
 }
 
 impl Default for Model {
     fn default() -> Self {
-        let (app, data) = Self::init_app();
+        let (app, data, uniforms) = Self::init_app();
         Self {
             app,
             quit: false,
             redraw: true,
-            uniforms: HashMap::new(),
+            uniforms,
             data,
             runner: None,
-            queue: None,
-            test: String::new(),
+            queue: Vec::new(),
+            test: "".to_string(),
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
@@ -50,54 +50,73 @@ impl Default for Model {
 impl Model {
     pub fn new(auth: AuthPlatform, token: String) -> Self {
         let mut obj = Self::default();
-        obj.uniforms.insert("auth".to_string(), auth.to_string());
-        obj.uniforms.insert("token".to_string(), token.clone());
+        obj.uniforms
+            .insert("auth".to_string(), Rc::new(RefCell::new(auth.to_string())));
+        obj.uniforms
+            .insert("token".to_string(), Rc::new(RefCell::new(token.clone())));
 
         let runner = Runner::new();
-        let queue = Rc::new(RefCell::new(Vec::new()));
         obj.runner = Some(runner);
-        obj.queue = Some(queue.clone());
 
         let id = obj.runner.clone().unwrap().add_async_task(
             true,
-            json!({
-                "code": 200,
-                "success": true,
-                "payload": {
-                    "features": [
-                        "serde",
-                        "json"
-                    ],
-                    "homepage": null
-                }
-            })
-            .to_string(),
+            Task::new(
+                TaskNames::ProviderOverview,
+                json!({
+                    "auth": auth.to_string(),
+                    "token": token,
+                }),
+            ),
         );
-        queue.borrow_mut().push(id);
+        obj.queue.push(id);
+        let id = obj.runner.clone().unwrap().add_async_task(
+            true,
+            Task::new(
+                TaskNames::FetchServers,
+                json!({
+                    "auth": auth.to_string(),
+                    "token": token,
+                }),
+            ),
+        );
         obj.test = id.to_string();
+        obj.queue.push(id);
 
         obj
     }
 
-    pub fn post(self, update: bool, input: String) -> Uuid {
+    pub fn post(self, update: bool, input: Task) -> Uuid {
         self.runner.clone().unwrap().add_async_task(update, input)
     }
 
-    pub fn fetch(&mut self, id: Uuid) -> Option<(bool, String)> {
-        self.runner.clone().unwrap().get_async_data(id)
+    pub fn fetch(&mut self, id: Uuid) -> Option<(bool, Task)> {
+        self.runner.clone().unwrap().get_async_task(id)
     }
 
     pub fn handle_tasks(&mut self) -> bool {
-        let queue = self.queue.clone().unwrap();
-        let mut queue = queue.borrow_mut();
         let mut i = 0;
         let mut flag = false;
-        while i < queue.len() {
-            let id = queue[i];
-            if let Some((update, data)) = self.fetch(id) {
+        while i < self.queue.len() {
+            let id = self.queue[i];
+            if let Some((update, task)) = self.fetch(id) {
                 flag |= update;
-                self.uniforms.insert(id.to_string(), data);
-                queue.remove(i);
+                match task.name {
+                    TaskNames::ProviderOverview => {
+                        let data = HeaderOverview::new(task.data);
+                        let mut x = self
+                            .uniforms
+                            .get_mut("header_overview")
+                            .unwrap()
+                            .borrow_mut();
+                        x.clear();
+                        x.push_str(serde_json::to_string(&data).unwrap().as_str());
+                    }
+                    _ => {
+                        self.uniforms
+                            .insert(id.to_string(), Rc::new(RefCell::new(task.data.to_string())));
+                    }
+                }
+                self.queue.remove(i);
             } else {
                 i += 1;
             }
@@ -117,7 +136,7 @@ impl Model {
                         [
                             Constraint::Length(8), // Header
                             Constraint::Fill(1),   // UI
-                            Constraint::Length(1), // Label
+                            Constraint::Length(3), // Label
                         ]
                         .as_ref(),
                     )
@@ -154,6 +173,7 @@ impl Model {
     fn init_app() -> (
         Application<Id, Msg, NoUserEvent>,
         HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
+        HashMap<String, Rc<RefCell<String>>>,
     ) {
         let mut data = HashMap::default();
         data.insert(
@@ -172,6 +192,12 @@ impl Model {
             PreviewDataTypes::Image,
             Rc::new(RefCell::new("ubuntu-20.04".to_string())),
         );
+        let mut uniforms = HashMap::default();
+        let overview = HeaderOverview::default();
+        uniforms.insert(
+            "header_overview".to_string(),
+            Rc::new(RefCell::new(serde_json::to_string(&overview).unwrap())),
+        );
 
         let mut app: Application<Id, Msg, NoUserEvent> = Application::init(
             EventListenerCfg::default()
@@ -182,7 +208,13 @@ impl Model {
 
         // Mount header
         assert!(app
-            .mount(Id::Header, Box::new(Header::default()), Vec::default())
+            .mount(
+                Id::Header,
+                Box::new(Header::new(
+                    uniforms.get_mut("header_overview").unwrap().clone()
+                )),
+                Vec::default()
+            )
             .is_ok());
 
         // Mount UI
@@ -227,7 +259,7 @@ impl Model {
 
         // Active Header
         assert!(app.active(&Id::Header).is_ok());
-        (app, data)
+        (app, data, uniforms)
     }
 
     pub fn terminate(&mut self) {
@@ -316,12 +348,15 @@ impl Update<Msg> for Model {
             .attr(
                 &Id::Label,
                 Attribute::Text,
-                AttrValue::String(format!(
-                    "Debug: {} {} {:?}",
-                    self.uniforms.get("auth").unwrap(),
-                    self.uniforms.get("token").unwrap(),
-                    self.uniforms.get(&self.test).unwrap()
-                ))
+                AttrValue::String(
+                    format!("Debug: {:?}", self.uniforms.get(&self.test))
+                        .chars()
+                        .collect::<Vec<char>>()
+                        .chunks(128)
+                        .map(|chunk| chunk.iter().collect::<String>())
+                        .collect::<Vec<String>>()
+                        .join("\n")
+                )
             )
             .is_ok());
         res
