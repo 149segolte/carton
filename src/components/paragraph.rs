@@ -23,8 +23,9 @@ impl Default for Header {
                 .title(" Carton ", Alignment::Left)
                 .text(&[
                     TextSpan::new(""),
-                    TextSpan::new(" GCP: <Access Token>, Status: Disconnected"),
-                    TextSpan::new(" AWS: <Access Key>, Status: Disconnected"),
+                    TextSpan::new(" GCP Status: Disconnected"),
+                    TextSpan::new(" AWS Status: Disconnected"),
+                    TextSpan::new(" Hetzner Status: Disconnected"),
                     TextSpan::new(""),
                     TextSpan::new("Press ESC to exit"),
                 ]),

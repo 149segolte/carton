@@ -3,15 +3,16 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
-use hcloud::apis::configuration::Configuration;
-use hcloud::apis::servers_api;
+use serde_json::json;
 use tuirealm::event::NoUserEvent;
 use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
 use tuirealm::{
     Application, AttrValue, Attribute, EventListenerCfg, Sub, SubClause, SubEventClause, Update,
 };
+use uuid::Uuid;
 
+use crate::async_utils::Runner;
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
 use crate::components::paragraph::{Header, Preview, PreviewDataTypes};
@@ -23,6 +24,9 @@ pub struct Model {
     pub redraw: bool,
     pub uniforms: HashMap<String, String>,
     pub data: HashMap<PreviewDataTypes, Rc<RefCell<String>>>,
+    pub runner: Option<Runner>,
+    pub queue: Option<Rc<RefCell<Vec<Uuid>>>>,
+    test: String,
     pub terminal: TerminalBridge,
 }
 
@@ -35,6 +39,9 @@ impl Default for Model {
             redraw: true,
             uniforms: HashMap::new(),
             data,
+            runner: None,
+            queue: None,
+            test: String::new(),
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
@@ -46,22 +53,56 @@ impl Model {
         obj.uniforms.insert("auth".to_string(), auth.to_string());
         obj.uniforms.insert("token".to_string(), token.clone());
 
-        let mut configuration = Configuration::new();
-        configuration.bearer_access_token = Some(token);
+        let runner = Runner::new();
+        let queue = Rc::new(RefCell::new(Vec::new()));
+        obj.runner = Some(runner);
+        obj.queue = Some(queue.clone());
 
-        let servers = futures::executor::block_on(servers_api::list_servers(
-            &configuration,
-            Default::default(),
-        ))
-        .unwrap()
-        .servers;
-
-        obj.data.insert(
-            PreviewDataTypes::Servers,
-            Rc::new(RefCell::new(format!("{:?}", servers))),
+        let id = obj.runner.clone().unwrap().add_async_task(
+            true,
+            json!({
+                "code": 200,
+                "success": true,
+                "payload": {
+                    "features": [
+                        "serde",
+                        "json"
+                    ],
+                    "homepage": null
+                }
+            })
+            .to_string(),
         );
+        queue.borrow_mut().push(id);
+        obj.test = id.to_string();
 
         obj
+    }
+
+    pub fn post(self, update: bool, input: String) -> Uuid {
+        self.runner.clone().unwrap().add_async_task(update, input)
+    }
+
+    pub fn fetch(&mut self, id: Uuid) -> Option<(bool, String)> {
+        self.runner.clone().unwrap().get_async_data(id)
+    }
+
+    pub fn handle_tasks(&mut self) -> bool {
+        let queue = self.queue.clone().unwrap();
+        let mut queue = queue.borrow_mut();
+        let mut i = 0;
+        let mut flag = false;
+        while i < queue.len() {
+            let id = queue[i];
+            if let Some((update, data)) = self.fetch(id) {
+                flag |= update;
+                self.uniforms.insert(id.to_string(), data);
+                queue.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        flag
     }
 
     pub fn view(&mut self) {
@@ -198,11 +239,14 @@ impl Model {
 
 impl Update<Msg> for Model {
     fn update(&mut self, msg: Option<Msg>) -> Option<Msg> {
-        if let Some(msg) = msg {
+        if self.handle_tasks() {
+            self.redraw = true;
+        }
+        let res = if let Some(msg) = msg {
             // Set redraw
             self.redraw = true;
             // Match message
-            let res = match msg {
+            match msg {
                 Msg::AppClose => {
                     self.quit = true; // Terminate
                     None
@@ -263,21 +307,23 @@ impl Update<Msg> for Model {
                         .is_ok());
                     None
                 }
-            };
-            assert!(self
-                .app
-                .attr(
-                    &Id::Label,
-                    Attribute::Text,
-                    AttrValue::String(format!(
-                        "Debug: {} {}",
-                        self.uniforms["auth"], self.uniforms["token"]
-                    ))
-                )
-                .is_ok());
-            return res;
+            }
         } else {
             None
-        }
+        };
+        assert!(self
+            .app
+            .attr(
+                &Id::Label,
+                Attribute::Text,
+                AttrValue::String(format!(
+                    "Debug: {} {} {:?}",
+                    self.uniforms.get("auth").unwrap(),
+                    self.uniforms.get("token").unwrap(),
+                    self.uniforms.get(&self.test).unwrap()
+                ))
+            )
+            .is_ok());
+        res
     }
 }

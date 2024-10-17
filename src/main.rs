@@ -2,6 +2,7 @@ use clap::Parser;
 use tuirealm::{application::PollStrategy, Update};
 
 mod app;
+mod async_utils;
 mod components;
 mod constants;
 
