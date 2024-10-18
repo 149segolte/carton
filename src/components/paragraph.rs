@@ -124,7 +124,7 @@ impl Component<Msg, NoUserEvent> for Header {
         let cmd = match ev {
             Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
             Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
-                return Some(Msg::Focus(Id::TextInput1))
+                return Some(Msg::Focus(Id::ServerList))
             }
             _ => Cmd::None,
         };

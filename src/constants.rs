@@ -54,4 +54,5 @@ pub enum Id {
     TextInput3,
     Preview,
     Label,
+    ServerList,
 }

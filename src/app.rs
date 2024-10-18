@@ -15,6 +15,7 @@ use uuid::Uuid;
 use crate::async_utils::{Runner, Task, TaskNames};
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
+use crate::components::list::ServerList;
 use crate::components::paragraph::{Header, HeaderOverview, Preview, PreviewDataTypes};
 use crate::constants::{AuthPlatform, Id, Msg};
 
@@ -134,21 +135,23 @@ impl Model {
                     .margin(0)
                     .constraints(
                         [
-                            Constraint::Length(8), // Header
-                            Constraint::Fill(1),   // UI
-                            Constraint::Length(3), // Label
+                            Constraint::Length(8),  // Header
+                            Constraint::Length(12), // List
+                            Constraint::Fill(1),    // UI
+                            Constraint::Length(3),  // Label
                         ]
                         .as_ref(),
                     )
                     .split(f.size());
                 self.app.view(&Id::Header, f, chunks[0]);
-                self.app.view(&Id::Label, f, chunks[2]);
+                self.app.view(&Id::ServerList, f, chunks[1]);
+                self.app.view(&Id::Label, f, chunks[3]);
 
                 let ui_chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .margin(0)
                     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                    .split(chunks[1]);
+                    .split(chunks[2]);
                 self.app.view(&Id::Preview, f, ui_chunks[1]);
 
                 let input_chunks = Layout::default()
@@ -213,6 +216,15 @@ impl Model {
                 Box::new(Header::new(
                     uniforms.get_mut("header_overview").unwrap().clone()
                 )),
+                Vec::default()
+            )
+            .is_ok());
+
+        // Mount server list
+        assert!(app
+            .mount(
+                Id::ServerList,
+                Box::new(ServerList::default()),
                 Vec::default()
             )
             .is_ok());
