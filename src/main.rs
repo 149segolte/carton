@@ -1,17 +1,15 @@
+use app::model::Model;
 use clap::Parser;
 use tuirealm::{application::PollStrategy, Update};
 
 mod app;
-mod async_utils;
 mod components;
 mod constants;
-
-use crate::app::Model;
 
 fn main() {
     let args = constants::Args::parse();
 
-    let mut model = Model::new(args.auth, args.token);
+    let mut model = Model::new(args);
     let _ = model.terminal.enter_alternate_screen();
     let _ = model.terminal.enable_raw_mode();
 

@@ -1,93 +1,34 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use serde::{Deserialize, Serialize};
 use tui_realm_stdlib::Paragraph;
 use tuirealm::command::Cmd;
 use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, Color, PropPayload, PropValue, TextSpan};
-use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent, NoUserEvent};
+use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg};
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct HeaderOverview {
-    name: String,
-    status: String,
-    servers: usize,
-    primary_ips: usize,
-    firewalls: usize,
-    load_balancers: usize,
-}
-
-impl Default for HeaderOverview {
-    fn default() -> Self {
-        Self {
-            name: "Unknown".to_string(),
-            status: "Disconnected".to_string(),
-            servers: 0,
-            primary_ips: 0,
-            firewalls: 0,
-            load_balancers: 0,
-        }
-    }
-}
-
-impl HeaderOverview {
-    pub fn new(data: serde_json::Value) -> Self {
-        let mut obj = Self::default();
-        if let Some(name) = data.get("name") {
-            obj.name = name.as_str().unwrap().to_string();
-        }
-        if let Some(status) = data.get("status") {
-            obj.status = status.as_str().unwrap().to_string();
-        }
-        if let Some(servers) = data.get("servers") {
-            obj.servers = servers.as_u64().unwrap() as usize;
-        }
-        if let Some(primary_ips) = data.get("primary_ips") {
-            obj.primary_ips = primary_ips.as_u64().unwrap() as usize;
-        }
-        if let Some(firewalls) = data.get("firewalls") {
-            obj.firewalls = firewalls.as_u64().unwrap() as usize;
-        }
-        if let Some(load_balancers) = data.get("load_balancers") {
-            obj.load_balancers = load_balancers.as_u64().unwrap() as usize;
-        }
-        obj
-    }
-}
+use crate::constants::{Id, Msg, ProviderStatus, UserEvent, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct Header {
     component: Paragraph,
-    overview: Option<Rc<RefCell<String>>>,
 }
 
 impl Default for Header {
     fn default() -> Self {
-        Self {
+        let mut obj = Self {
             component: Paragraph::default()
                 .background(Color::Reset)
                 .foreground(Color::Reset)
                 .title(" Carton ", Alignment::Left),
-            overview: None,
-        }
+        };
+        obj.update_status(ProviderStatus::default());
+        obj
     }
 }
 
 impl Header {
-    pub fn new(overview: Rc<RefCell<String>>) -> Self {
-        let mut obj = Self::default();
-        obj.overview = Some(overview);
-        obj.update_overview();
-        obj
-    }
-
-    pub fn update_overview(&mut self) {
-        let data = self.overview.as_ref().unwrap().as_ref().borrow();
-        let overview = serde_json::from_str::<HeaderOverview>(&data).unwrap();
-
+    pub fn update_status(&mut self, status: ProviderStatus) {
         self.component.attr(
             Attribute::Text,
             AttrValue::Payload(PropPayload::Vec(
@@ -95,15 +36,12 @@ impl Header {
                     TextSpan::new(""),
                     TextSpan::new(format!(
                         " Provider: {}, Status: {}",
-                        overview.name, overview.status
+                        status.name, status.status
                     )),
                     TextSpan::new(""),
                     TextSpan::new(format!(
                         " Servers: {} | Primary IPs: {} | Firewalls: {} | Load Balancers: {}",
-                        overview.servers,
-                        overview.primary_ips,
-                        overview.firewalls,
-                        overview.load_balancers
+                        status.servers, status.primary_ips, status.firewalls, status.load_balancers
                     )),
                     TextSpan::new(""),
                     TextSpan::new("Press ESC to exit."),
@@ -117,17 +55,32 @@ impl Header {
     }
 }
 
-impl Component<Msg, NoUserEvent> for Header {
-    fn on(&mut self, ev: Event<NoUserEvent>) -> Option<Msg> {
-        self.update_overview();
-
+impl Component<Msg, UserEventIter> for Header {
+    fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         let cmd = match ev {
             Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
             Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
                 return Some(Msg::Focus(Id::ServerList))
             }
+            Event::User(UserEventIter { events }) => {
+                for ev in events {
+                    if let UserEvent::ProviderStatus(status) = ev {
+                        self.update_status(status);
+                    }
+                }
+                return Some(Msg::Nop);
+            }
             _ => Cmd::None,
         };
+
+        if self
+            .query(Attribute::Custom("launch"))
+            .unwrap_or(AttrValue::Flag(false))
+            .unwrap_flag()
+        {
+            self.attr(Attribute::Custom("launch"), AttrValue::Flag(false));
+            return Some(Msg::Launch);
+        }
 
         self.perform(cmd);
         None
@@ -167,17 +120,12 @@ impl Default for Preview {
 }
 
 impl Preview {
-    pub fn new(
-        servers: Rc<RefCell<String>>,
-        name: Rc<RefCell<String>>,
-        region: Rc<RefCell<String>>,
-        image: Rc<RefCell<String>>,
-    ) -> Self {
+    pub fn new() -> Self {
         let mut s = Self::default();
-        s.servers = Some(servers);
-        s.name = Some(name);
-        s.region = Some(region);
-        s.image = Some(image);
+        s.servers = Some(Rc::new(RefCell::new("0".to_string())));
+        s.name = Some(Rc::new(RefCell::new("Unknown".to_string())));
+        s.region = Some(Rc::new(RefCell::new("Unknown".to_string())));
+        s.image = Some(Rc::new(RefCell::new("Unknown".to_string())));
         s.update_text();
         s
     }
@@ -213,8 +161,8 @@ impl Preview {
     }
 }
 
-impl Component<Msg, NoUserEvent> for Preview {
-    fn on(&mut self, ev: Event<NoUserEvent>) -> Option<Msg> {
+impl Component<Msg, UserEventIter> for Preview {
+    fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         self.update_text();
 
         let cmd = match ev {

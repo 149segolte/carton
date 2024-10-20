@@ -1,8 +1,8 @@
 use tui_realm_stdlib::Label;
 use tuirealm::props::{Alignment, Color, TextModifiers};
-use tuirealm::{Component, Event, MockComponent, NoUserEvent};
+use tuirealm::{Component, Event, MockComponent};
 
-use crate::constants::Msg;
+use crate::constants::{Msg, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct TextLabel {
@@ -22,8 +22,8 @@ impl Default for TextLabel {
     }
 }
 
-impl Component<Msg, NoUserEvent> for TextLabel {
-    fn on(&mut self, _: Event<NoUserEvent>) -> Option<Msg> {
+impl Component<Msg, UserEventIter> for TextLabel {
+    fn on(&mut self, _: Event<UserEventIter>) -> Option<Msg> {
         None
     }
 }

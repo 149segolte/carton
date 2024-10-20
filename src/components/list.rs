@@ -1,12 +1,10 @@
 use tui_realm_stdlib::List;
 use tuirealm::command::{Cmd, Direction, Position};
 use tuirealm::event::{Key, KeyEvent};
-use tuirealm::props::{
-    Alignment, BorderType, Borders, Color, TableBuilder, TextModifiers, TextSpan,
-};
-use tuirealm::{Component, Event, MockComponent, NoUserEvent};
+use tuirealm::props::{Alignment, BorderType, Borders, Color, TableBuilder, TextSpan};
+use tuirealm::{Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg};
+use crate::constants::{Id, Msg, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct ServerList {
@@ -88,8 +86,8 @@ impl Default for ServerList {
     }
 }
 
-impl Component<Msg, NoUserEvent> for ServerList {
-    fn on(&mut self, ev: Event<NoUserEvent>) -> Option<Msg> {
+impl Component<Msg, UserEventIter> for ServerList {
+    fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         let cmd = match ev {
             Event::Keyboard(KeyEvent {
                 code: Key::Down, ..

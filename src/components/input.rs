@@ -2,9 +2,9 @@ use tui_realm_stdlib::Input;
 use tuirealm::command::{Cmd, CmdResult, Direction, Position};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, InputType, Style};
-use tuirealm::{Component, Event, MockComponent, NoUserEvent};
+use tuirealm::{Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg};
+use crate::constants::{Id, Msg, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct TextInput {
@@ -59,8 +59,8 @@ impl TextInput {
     }
 }
 
-impl Component<Msg, NoUserEvent> for TextInput {
-    fn on(&mut self, ev: Event<NoUserEvent>) -> Option<Msg> {
+impl Component<Msg, UserEventIter> for TextInput {
+    fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         let cmd = match ev {
             Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
             Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
