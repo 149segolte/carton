@@ -1,17 +1,11 @@
 use std::time::Duration;
 
 use tuirealm::terminal::TerminalBridge;
-use tuirealm::tui::layout::{Constraint, Direction, Layout};
-use tuirealm::{
-    Application, AttrValue, Attribute, EventListenerCfg, Sub, SubClause, SubEventClause, Update,
-};
+use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
 
+use crate::app::interface::Interface;
 use crate::app::tasks::{Task, TaskHandler, TaskRequest};
-use crate::components::input::TextInput;
-use crate::components::label::TextLabel;
-use crate::components::list::ServerList;
-use crate::components::paragraph::{Header, Preview};
-use crate::constants::{Args, Config, Id, Msg, ProviderStatus, UserEvent, UserEventIter};
+use crate::constants::{Args, Config, Id, Msg, UserEventIter};
 
 pub struct Model {
     pub app: Application<Id, Msg, UserEventIter>,
@@ -19,25 +13,35 @@ pub struct Model {
     pub redraw: bool,
     pub config: Config,
     pub tasks: TaskHandler,
+    pub interface: Interface,
     pub terminal: TerminalBridge,
 }
 
 impl Model {
     pub fn new(args: Args) -> Self {
-        let (app, task_handler, config) = Self::init_app(args);
+        let (app, config, task_handler, interface) = Self::init_app(args);
         Self {
             app,
             quit: false,
             redraw: true,
             config,
             tasks: task_handler,
+            interface,
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
 
-    fn init_app(args: Args) -> (Application<Id, Msg, UserEventIter>, TaskHandler, Config) {
+    fn init_app(
+        args: Args,
+    ) -> (
+        Application<Id, Msg, UserEventIter>,
+        Config,
+        TaskHandler,
+        Interface,
+    ) {
         let config = Config::new(args);
         let task_handler = TaskHandler::new(config.clone());
+        let interface = Interface::default();
 
         let mut app: Application<Id, Msg, UserEventIter> = Application::init(
             EventListenerCfg::default()
@@ -47,123 +51,13 @@ impl Model {
                 .port(Box::new(task_handler.clone()), Duration::from_millis(100)),
         );
 
-        // Mount header
-        assert!(app
-            .mount(
-                Id::Header,
-                Box::new(Header::default()),
-                vec![Sub::new(
-                    SubEventClause::User(UserEventIter::new(vec![UserEvent::ProviderStatus(
-                        ProviderStatus::default()
-                    )])),
-                    SubClause::Always
-                )]
-            )
-            .is_ok());
+        interface.init(&mut app);
 
-        // Mount server list
-        assert!(app
-            .mount(
-                Id::ServerList,
-                Box::new(ServerList::default()),
-                Vec::default()
-            )
-            .is_ok());
-
-        // Mount UI
-        assert!(app
-            .mount(
-                Id::Preview,
-                Box::new(Preview::new()),
-                vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
-            )
-            .is_ok());
-        assert!(app
-            .mount(
-                Id::TextInput1,
-                Box::new(TextInput::new(Id::TextInput1, Id::TextInput2)),
-                Vec::default()
-            )
-            .is_ok());
-        assert!(app
-            .mount(
-                Id::TextInput2,
-                Box::new(TextInput::new(Id::TextInput2, Id::TextInput3)),
-                Vec::default()
-            )
-            .is_ok());
-        assert!(app
-            .mount(
-                Id::TextInput3,
-                Box::new(TextInput::new(Id::TextInput3, Id::Header)),
-                Vec::default()
-            )
-            .is_ok());
-
-        // Mount Message label
-        assert!(app
-            .mount(Id::Label, Box::new(TextLabel::default()), Vec::default(),)
-            .is_ok());
-
-        // Active Header
-        assert!(app.active(&Id::Header).is_ok());
-        assert!(app
-            .attr(
-                &Id::Header,
-                Attribute::Custom("launch"),
-                AttrValue::Flag(true)
-            )
-            .is_ok());
-
-        (app, task_handler, config)
+        (app, config, task_handler, interface)
     }
 
     pub fn view(&mut self) {
-        assert!(self
-            .terminal
-            .raw_mut()
-            .draw(|f| {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(0)
-                    .constraints(
-                        [
-                            Constraint::Length(8),  // Header
-                            Constraint::Length(12), // List
-                            Constraint::Fill(1),    // UI
-                            Constraint::Length(3),  // Label
-                        ]
-                        .as_ref(),
-                    )
-                    .split(f.size());
-                self.app.view(&Id::Header, f, chunks[0]);
-                self.app.view(&Id::ServerList, f, chunks[1]);
-                self.app.view(&Id::Label, f, chunks[3]);
-
-                let ui_chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .margin(0)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                    .split(chunks[2]);
-                self.app.view(&Id::Preview, f, ui_chunks[1]);
-
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(0)
-                    .constraints(
-                        [
-                            Constraint::Length(3),
-                            Constraint::Length(3),
-                            Constraint::Length(3),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(ui_chunks[0]);
-                self.app.view(&Id::TextInput1, f, input_chunks[0]);
-                self.app.view(&Id::TextInput2, f, input_chunks[1]);
-                self.app.view(&Id::TextInput3, f, input_chunks[2]);
-            })
-            .is_ok());
+        self.interface.view(&mut self.app, &mut self.terminal);
     }
 
     pub fn terminate(&mut self) {
@@ -180,23 +74,40 @@ impl Update<Msg> for Model {
             self.redraw = true;
             // Match message
             match msg {
+                Msg::Nop => None,
+                Msg::Launch => Some(Msg::UpdateProviderStatus),
                 Msg::AppClose => {
                     self.quit = true; // Terminate
                     None
                 }
-                Msg::Launch => Some(Msg::UpdateProviderStatus),
-                Msg::Nop => None,
-                Msg::Focus(id) => {
-                    assert!(self.app.active(&id).is_ok());
+                Msg::Connected => {
                     // Update label
                     assert!(self
                         .app
                         .attr(
                             &Id::Label,
                             Attribute::Text,
-                            AttrValue::String(format!("Focus changed to: {:?}", id))
+                            AttrValue::String("Provider connected".to_string())
                         )
                         .is_ok());
+
+                    todo!()
+                }
+                Msg::Disconnected => {
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String("Provider disconnected".to_string())
+                        )
+                        .is_ok());
+
+                    todo!()
+                }
+                Msg::ChangeFocus => {
+                    self.interface.change_focus(&mut self.app);
                     None
                 }
                 Msg::Input(id, input) => {

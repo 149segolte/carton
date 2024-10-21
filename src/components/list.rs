@@ -4,7 +4,7 @@ use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, TableBuilder, TextSpan};
 use tuirealm::{Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg, UserEventIter};
+use crate::constants::{Msg, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct ServerList {
@@ -104,14 +104,10 @@ impl Component<Msg, UserEventIter> for ServerList {
                 code: Key::Home, ..
             }) => Cmd::GoTo(Position::Begin),
             Event::Keyboard(KeyEvent { code: Key::End, .. }) => Cmd::GoTo(Position::End),
-            Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
-                return Some(Msg::Focus(Id::TextInput1))
-            }
             _ => Cmd::None,
         };
 
         self.perform(cmd);
-        None
+        Some(Msg::Nop)
     }
 }

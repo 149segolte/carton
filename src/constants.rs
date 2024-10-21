@@ -12,10 +12,12 @@ pub struct Args {
 #[derive(Debug, PartialEq)]
 pub enum Msg {
     AppClose,
-    Focus(Id),
+    ChangeFocus,
     Input(Id, String),
     UpdateProviderStatus,
     Launch,
+    Connected,
+    Disconnected,
     Nop,
 }
 
@@ -28,6 +30,7 @@ pub enum Id {
     Preview,
     Label,
     ServerList,
+    Phantom,
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Default)]

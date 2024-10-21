@@ -10,7 +10,6 @@ use crate::constants::{Id, Msg, UserEventIter};
 pub struct TextInput {
     component: Input,
     id: Option<Id>,
-    link: Option<Id>,
 }
 
 impl Default for TextInput {
@@ -26,49 +25,37 @@ impl Default for TextInput {
                 .input_type(InputType::Text)
                 .invalid_style(Style::default().fg(Color::Red)),
             id: None,
-            link: None,
         }
     }
 }
 
 impl TextInput {
-    pub fn new(id: Id, link: Id) -> Self {
-        Self::default().customize(id).with_link(link)
-    }
-
-    pub fn customize(mut self, id: Id) -> Self {
-        self.id = Some(id.clone());
-        match id {
-            Id::TextInput1 => {
-                self.component = self.component.title(" Name ", Alignment::Left);
-            }
-            Id::TextInput2 => {
-                self.component = self.component.title(" Region ", Alignment::Left);
-            }
-            Id::TextInput3 => {
-                self.component = self.component.title(" Image ", Alignment::Left);
-            }
-            _ => {}
+    pub fn new(id: Id) -> Self {
+        let title = match id {
+            Id::TextInput1 => " Name ",
+            Id::TextInput2 => " Region ",
+            Id::TextInput3 => " Image ",
+            _ => "",
+        };
+        Self {
+            id: Some(id.clone()),
+            component: Input::default()
+                .borders(
+                    Borders::default()
+                        .modifiers(BorderType::Rounded)
+                        .color(Color::LightYellow),
+                )
+                .title(title, Alignment::Left)
+                .foreground(Color::LightYellow)
+                .input_type(InputType::Text)
+                .invalid_style(Style::default().fg(Color::Red)),
         }
-        self
-    }
-
-    pub fn with_link(mut self, link: Id) -> Self {
-        self.link = Some(link);
-        self
     }
 }
 
 impl Component<Msg, UserEventIter> for TextInput {
     fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         let cmd = match ev {
-            Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
-                if self.link.is_some() {
-                    return Some(Msg::Focus(self.link.clone().unwrap()));
-                }
-                Cmd::None
-            }
             Event::Keyboard(KeyEvent {
                 code: Key::Left, ..
             }) => Cmd::Move(Direction::Left),

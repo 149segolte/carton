@@ -7,7 +7,7 @@ use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, Color, PropPayload, PropValue, TextSpan};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg, ProviderStatus, UserEvent, UserEventIter};
+use crate::constants::{Msg, ProviderStatus, UserEvent, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct Header {
@@ -58,17 +58,19 @@ impl Header {
 impl Component<Msg, UserEventIter> for Header {
     fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
         let cmd = match ev {
-            Event::Keyboard(KeyEvent { code: Key::Esc, .. }) => return Some(Msg::AppClose),
-            Event::Keyboard(KeyEvent { code: Key::Tab, .. }) => {
-                return Some(Msg::Focus(Id::ServerList))
-            }
             Event::User(UserEventIter { events }) => {
+                let mut msg = Msg::Nop;
                 for ev in events {
                     if let UserEvent::ProviderStatus(status) = ev {
+                        msg = if status.status == "Connected" {
+                            Msg::Connected
+                        } else {
+                            Msg::Disconnected
+                        };
                         self.update_status(status);
                     }
                 }
-                return Some(Msg::Nop);
+                return Some(msg);
             }
             _ => Cmd::None,
         };
