@@ -7,84 +7,31 @@ use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, Color, PropPayload, PropValue, TextSpan};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::constants::{Msg, ProviderStatus, UserEvent, UserEventIter};
+use crate::constants::{Msg, UserEventIter};
 
 #[derive(MockComponent)]
-pub struct Header {
+pub struct ServerListDisconnected {
     component: Paragraph,
 }
 
-impl Default for Header {
+impl Default for ServerListDisconnected {
     fn default() -> Self {
-        let mut obj = Self {
+        Self {
             component: Paragraph::default()
                 .background(Color::Reset)
-                .foreground(Color::Reset)
-                .title(" Carton ", Alignment::Left),
-        };
-        obj.update_status(ProviderStatus::default());
-        obj
-    }
-}
-
-impl Header {
-    pub fn update_status(&mut self, status: ProviderStatus) {
-        self.component.attr(
-            Attribute::Text,
-            AttrValue::Payload(PropPayload::Vec(
-                vec![
+                .foreground(Color::LightYellow)
+                .title(" Servers List ", Alignment::Center)
+                .text(&[
                     TextSpan::new(""),
-                    TextSpan::new(format!(
-                        " Provider: {}, Status: {}",
-                        status.name, status.status
-                    )),
-                    TextSpan::new(""),
-                    TextSpan::new(format!(
-                        " Servers: {} | Primary IPs: {} | Firewalls: {} | Load Balancers: {}",
-                        status.servers, status.primary_ips, status.firewalls, status.load_balancers
-                    )),
-                    TextSpan::new(""),
-                    TextSpan::new("Press ESC to exit."),
-                ]
-                .iter()
-                .cloned()
-                .map(PropValue::TextSpan)
-                .collect(),
-            )),
-        );
-    }
-}
-
-impl Component<Msg, UserEventIter> for Header {
-    fn on(&mut self, ev: Event<UserEventIter>) -> Option<Msg> {
-        let cmd = match ev {
-            Event::User(UserEventIter { events }) => {
-                let mut msg = Msg::Nop;
-                for ev in events {
-                    if let UserEvent::ProviderStatus(status) = ev {
-                        msg = if status.status == "Connected" {
-                            Msg::Connected
-                        } else {
-                            Msg::Disconnected
-                        };
-                        self.update_status(status);
-                    }
-                }
-                return Some(msg);
-            }
-            _ => Cmd::None,
-        };
-
-        if self
-            .query(Attribute::Custom("launch"))
-            .unwrap_or(AttrValue::Flag(false))
-            .unwrap_flag()
-        {
-            self.attr(Attribute::Custom("launch"), AttrValue::Flag(false));
-            return Some(Msg::Launch);
+                    TextSpan::new("Refresh or change provider to connect."),
+                ])
+                .alignment(Alignment::Center),
         }
+    }
+}
 
-        self.perform(cmd);
+impl Component<Msg, UserEventIter> for ServerListDisconnected {
+    fn on(&mut self, _: Event<UserEventIter>) -> Option<Msg> {
         None
     }
 }

@@ -4,14 +4,13 @@ use tuirealm::terminal::TerminalBridge;
 use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
 
 use crate::app::interface::Interface;
-use crate::app::tasks::{Task, TaskHandler, TaskRequest};
-use crate::constants::{Args, Config, Id, Msg, UserEventIter};
+use crate::app::tasks::{Task, TaskHandler, Tasks};
+use crate::constants::{Args, Config, Id, Msg, UserEvent, UserEventIter};
 
 pub struct Model {
     pub app: Application<Id, Msg, UserEventIter>,
     pub quit: bool,
     pub redraw: bool,
-    pub config: Config,
     pub tasks: TaskHandler,
     pub interface: Interface,
     pub terminal: TerminalBridge,
@@ -19,26 +18,18 @@ pub struct Model {
 
 impl Model {
     pub fn new(args: Args) -> Self {
-        let (app, config, task_handler, interface) = Self::init_app(args);
+        let (app, task_handler, interface) = Self::init_app(args);
         Self {
             app,
             quit: false,
             redraw: true,
-            config,
             tasks: task_handler,
             interface,
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
 
-    fn init_app(
-        args: Args,
-    ) -> (
-        Application<Id, Msg, UserEventIter>,
-        Config,
-        TaskHandler,
-        Interface,
-    ) {
+    fn init_app(args: Args) -> (Application<Id, Msg, UserEventIter>, TaskHandler, Interface) {
         let config = Config::new(args);
         let task_handler = TaskHandler::new(config.clone());
         let interface = Interface::default();
@@ -53,7 +44,7 @@ impl Model {
 
         interface.init(&mut app);
 
-        (app, config, task_handler, interface)
+        (app, task_handler, interface)
     }
 
     pub fn view(&mut self) {
@@ -91,7 +82,8 @@ impl Update<Msg> for Model {
                         )
                         .is_ok());
 
-                    todo!()
+                    // Update UI
+                    self.interface.perform(&mut self.app, Msg::Connected)
                 }
                 Msg::Disconnected => {
                     // Update label
@@ -104,20 +96,38 @@ impl Update<Msg> for Model {
                         )
                         .is_ok());
 
-                    todo!()
+                    // Update UI
+                    self.interface.perform(&mut self.app, Msg::Disconnected)
                 }
                 Msg::ChangeFocus => {
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String("Focus changed".to_string())
+                        )
+                        .is_ok());
+
+                    // Update UI
                     self.interface.change_focus(&mut self.app);
                     None
                 }
-                Msg::Input(id, input) => {
-                    match id {
-                        Id::TextInput1 => {}
-                        Id::TextInput2 => {}
-                        Id::TextInput3 => {}
-                        _ => {}
-                    }
+                Msg::UpdateState(event) => {
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String(format!("State update: {:?}", event))
+                        )
+                        .is_ok());
 
+                    None
+                }
+                Msg::Input(id, input) => {
                     // Update label
                     assert!(self
                         .app
@@ -131,10 +141,6 @@ impl Update<Msg> for Model {
                     None
                 }
                 Msg::UpdateProviderStatus => {
-                    self.tasks
-                        .clone()
-                        .add_task(Task::new(TaskRequest::ProviderStatus));
-
                     // Update label
                     assert!(self
                         .app
@@ -144,6 +150,28 @@ impl Update<Msg> for Model {
                             AttrValue::String("Provider status update issued".to_string())
                         )
                         .is_ok());
+
+                    // Trigger task
+                    self.tasks
+                        .clone()
+                        .add_task(Task::new(Tasks::ProviderStatus));
+
+                    None
+                }
+                Msg::FetchServers => {
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String("Fetching servers".to_string())
+                        )
+                        .is_ok());
+
+                    // Trigger task
+                    self.tasks.clone().add_task(Task::new(Tasks::FetchServers));
+
                     None
                 }
             }

@@ -2,12 +2,15 @@ use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
 use tuirealm::{Application, AttrValue, Attribute, Sub, SubClause, SubEventClause};
 
+use crate::components::container::Header;
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
-use crate::components::list::ServerList;
-use crate::components::paragraph::{Header, Preview};
+use crate::components::paragraph::{Preview, ServerListDisconnected};
 use crate::components::phantom::PhantomHandler;
-use crate::constants::{Id, Msg, ProviderStatus, UserEvent, UserEventIter};
+use crate::components::table::ServerListConnected;
+use crate::constants::{
+    Components, Id, Msg, ProviderStatus, ServerListStatus, UserEvent, UserEventIter,
+};
 
 #[derive(Debug, Clone, Default)]
 pub enum Interface {
@@ -16,6 +19,28 @@ pub enum Interface {
 }
 
 impl Interface {
+    fn mount(&self, app: &mut Application<Id, Msg, UserEventIter>, id: Id, component: Components) {
+        let subs = match component {
+            Components::Header(_) => vec![Sub::new(
+                SubEventClause::User(UserEventIter::new(vec![UserEvent::ProviderStatus(
+                    ProviderStatus::default(),
+                )])),
+                SubClause::Always,
+            )],
+            Components::Preview(_) => vec![Sub::new(SubEventClause::Tick, SubClause::Always)],
+            Components::ServerListConnected(_) => {
+                vec![Sub::new(
+                    SubEventClause::User(UserEventIter::new(vec![UserEvent::ServerListStatus(
+                        ServerListStatus::default(),
+                    )])),
+                    SubClause::Always,
+                )]
+            }
+            _ => Vec::default(),
+        };
+        assert!(app.mount(id, component.unwrap(), subs).is_ok());
+    }
+
     pub fn init(&self, app: &mut Application<Id, Msg, UserEventIter>) {
         match self {
             Interface::Status => {
@@ -23,63 +48,29 @@ impl Interface {
                 // Mount handler
                 PhantomHandler::mount(app);
 
-                // Mount header
-                assert!(app
-                    .mount(
-                        Id::Header,
-                        Box::new(Header::default()),
-                        vec![Sub::new(
-                            SubEventClause::User(UserEventIter::new(vec![
-                                UserEvent::ProviderStatus(ProviderStatus::default())
-                            ])),
-                            SubClause::Always
-                        )]
-                    )
-                    .is_ok());
-
-                // Mount server list
-                assert!(app
-                    .mount(
-                        Id::ServerList,
-                        Box::new(ServerList::default()),
-                        Vec::default()
-                    )
-                    .is_ok());
-
-                // Mount Inputs
-                assert!(app
-                    .mount(
-                        Id::Preview,
-                        Box::new(Preview::new()),
-                        vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
-                    )
-                    .is_ok());
-                assert!(app
-                    .mount(
-                        Id::TextInput1,
-                        Box::new(TextInput::new(Id::TextInput1)),
-                        Vec::default()
-                    )
-                    .is_ok());
-                assert!(app
-                    .mount(
-                        Id::TextInput2,
-                        Box::new(TextInput::new(Id::TextInput2)),
-                        Vec::default()
-                    )
-                    .is_ok());
-                assert!(app
-                    .mount(
-                        Id::TextInput3,
-                        Box::new(TextInput::new(Id::TextInput3)),
-                        Vec::default()
-                    )
-                    .is_ok());
-
-                // Mount Message label
-                assert!(app
-                    .mount(Id::Label, Box::new(TextLabel::default()), Vec::default(),)
-                    .is_ok());
+                self.mount(app, Id::Header, Components::Header(Header::default()));
+                self.mount(
+                    app,
+                    Id::ServerList,
+                    Components::ServerListDisconnected(ServerListDisconnected::default()),
+                );
+                self.mount(app, Id::Preview, Components::Preview(Preview::new()));
+                self.mount(
+                    app,
+                    Id::TextInput1,
+                    Components::TextInput(TextInput::new(Id::TextInput1)),
+                );
+                self.mount(
+                    app,
+                    Id::TextInput2,
+                    Components::TextInput(TextInput::new(Id::TextInput2)),
+                );
+                self.mount(
+                    app,
+                    Id::TextInput3,
+                    Components::TextInput(TextInput::new(Id::TextInput3)),
+                );
+                self.mount(app, Id::Label, Components::TextLabel(TextLabel::default()));
 
                 // Activate header
                 assert!(app.active(&Id::Header).is_ok());
@@ -177,6 +168,40 @@ impl Interface {
                     }
                 }
             }
+        }
+    }
+
+    pub fn perform(&self, app: &mut Application<Id, Msg, UserEventIter>, msg: Msg) -> Option<Msg> {
+        match self {
+            Interface::Status => match msg {
+                Msg::Connected => {
+                    if app.mounted(&Id::ServerList) {
+                        assert!(app.umount(&Id::ServerList).is_ok());
+                    }
+
+                    self.mount(
+                        app,
+                        Id::ServerList,
+                        Components::ServerListConnected(ServerListConnected::default()),
+                    );
+
+                    Some(Msg::FetchServers)
+                }
+                Msg::Disconnected => {
+                    if app.mounted(&Id::ServerList) {
+                        assert!(app.umount(&Id::ServerList).is_ok());
+                    }
+
+                    self.mount(
+                        app,
+                        Id::ServerList,
+                        Components::ServerListDisconnected(ServerListDisconnected::default()),
+                    );
+
+                    None
+                }
+                _ => None,
+            },
         }
     }
 }

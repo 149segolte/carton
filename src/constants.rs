@@ -1,4 +1,14 @@
 use clap::Parser;
+use hcloud::models::{server::Status, Server};
+use tuirealm::Component;
+
+use crate::components::{
+    container::Header,
+    input::TextInput,
+    label::TextLabel,
+    paragraph::{Preview, ServerListDisconnected},
+    table::ServerListConnected,
+};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -11,14 +21,16 @@ pub struct Args {
 
 #[derive(Debug, PartialEq)]
 pub enum Msg {
-    AppClose,
-    ChangeFocus,
-    Input(Id, String),
-    UpdateProviderStatus,
+    Nop,
     Launch,
+    AppClose,
     Connected,
     Disconnected,
-    Nop,
+    ChangeFocus,
+    UpdateState(UserEvent),
+    Input(Id, String),
+    UpdateProviderStatus,
+    FetchServers,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
@@ -31,6 +43,28 @@ pub enum Id {
     Label,
     ServerList,
     Phantom,
+}
+
+pub enum Components {
+    Header(Header),
+    TextInput(TextInput),
+    Preview(Preview),
+    TextLabel(TextLabel),
+    ServerListConnected(ServerListConnected),
+    ServerListDisconnected(ServerListDisconnected),
+}
+
+impl Components {
+    pub fn unwrap(self) -> Box<dyn Component<Msg, UserEventIter>> {
+        match self {
+            Components::Header(c) => Box::new(c),
+            Components::TextInput(c) => Box::new(c),
+            Components::Preview(c) => Box::new(c),
+            Components::TextLabel(c) => Box::new(c),
+            Components::ServerListConnected(c) => Box::new(c),
+            Components::ServerListDisconnected(c) => Box::new(c),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, PartialOrd, Default)]
@@ -122,11 +156,55 @@ impl ProviderStatus {
     }
 }
 
-#[derive(Debug, Clone, PartialOrd, Eq)]
+#[derive(Debug, Clone)]
+pub struct ServerStatus {
+    pub name: String,
+    pub status: String,
+    pub ip: String,
+}
+
+#[derive(Debug, Clone)]
+pub enum ServerHandle {
+    Hetzner(Server),
+}
+
+impl ServerHandle {
+    pub fn to_status(&self) -> ServerStatus {
+        match self {
+            ServerHandle::Hetzner(server) => ServerStatus {
+                name: server.name.clone(),
+                status: if server.status == Status::Running {
+                    "Online".to_string()
+                } else {
+                    "Offline".to_string()
+                },
+                ip: if let Some(ipv4) = server.public_net.ipv4.as_ref() {
+                    ipv4.ip.to_string()
+                } else {
+                    "Private".to_string()
+                },
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServerListStatus {
+    pub servers: Vec<ServerHandle>,
+}
+
+impl ServerListStatus {
+    pub fn new(servers: Vec<ServerHandle>) -> Self {
+        Self { servers }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum UserEvent {
     ProviderStatus(ProviderStatus),
-    ServerList(Vec<String>),
+    ServerListStatus(ServerListStatus),
     Error(String),
+    Empty,
 }
 
 impl PartialEq for UserEvent {
@@ -134,9 +212,24 @@ impl PartialEq for UserEvent {
         matches!(
             (self, other),
             (UserEvent::ProviderStatus(_), UserEvent::ProviderStatus(_))
-                | (UserEvent::ServerList(_), UserEvent::ServerList(_))
+                | (
+                    UserEvent::ServerListStatus(_),
+                    UserEvent::ServerListStatus(_)
+                )
                 | (UserEvent::Error(_), UserEvent::Error(_))
         )
+    }
+}
+
+impl Eq for UserEvent {}
+
+impl PartialOrd for UserEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.eq(other) {
+            Some(std::cmp::Ordering::Equal)
+        } else {
+            None
+        }
     }
 }
 

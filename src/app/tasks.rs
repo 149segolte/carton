@@ -8,39 +8,34 @@ use tokio::runtime::Runtime;
 use tuirealm::listener::{ListenerResult, Poll};
 use tuirealm::Event;
 
-use crate::constants::{Config, ProviderStatus, UserEvent, UserEventIter};
+use crate::constants::{
+    Config, ProviderStatus, ServerHandle, ServerListStatus, UserEvent, UserEventIter,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub enum TaskRequest {
+#[derive(Debug, Clone)]
+pub enum Tasks {
     ProviderStatus,
     FetchServers,
     Nop,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub enum TaskResponse {
-    ProviderStatus(ProviderStatus),
-    Error(String),
-    Empty,
-}
-
-#[derive(Debug, Clone, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Task {
-    pub request: TaskRequest,
-    pub response: Option<TaskResponse>,
+    pub request: Tasks,
+    pub response: Option<UserEvent>,
 }
 
 impl Default for Task {
     fn default() -> Self {
         Self {
-            request: TaskRequest::Nop,
+            request: Tasks::Nop,
             response: None,
         }
     }
 }
 
 impl Task {
-    pub fn new(request: TaskRequest) -> Self {
+    pub fn new(request: Tasks) -> Self {
         Self {
             request,
             ..Default::default()
@@ -49,7 +44,7 @@ impl Task {
 
     async fn run(&mut self, config: Config) -> Result<()> {
         match &self.request {
-            TaskRequest::ProviderStatus => {
+            Tasks::ProviderStatus => {
                 let mut overview = ProviderStatus::new(config.auth.auth.clone());
 
                 let mut configuration = Configuration::new();
@@ -70,10 +65,25 @@ impl Task {
                     overview.status = format!("Disconnected, Error: {:?}", resp.err().unwrap());
                 }
 
-                self.response = Some(TaskResponse::ProviderStatus(overview));
+                self.response = Some(UserEvent::ProviderStatus(overview));
             }
-            _ => {
-                self.response = Some(TaskResponse::Empty);
+            Tasks::FetchServers => {
+                let mut configuration = Configuration::new();
+                configuration.bearer_access_token = Some(config.auth.token.to_string());
+
+                let resp = servers_api::list_servers(&configuration, Default::default()).await;
+                if resp.is_ok() {
+                    self.response = Some(UserEvent::ServerListStatus(ServerListStatus::new(
+                        resp.unwrap()
+                            .servers
+                            .iter()
+                            .map(|s| ServerHandle::Hetzner(s.clone()))
+                            .collect(),
+                    )));
+                }
+            }
+            Tasks::Nop => {
+                self.response = Some(UserEvent::Empty);
             }
         }
         Ok(())
@@ -97,7 +107,7 @@ impl TaskHandler {
             rt.block_on(async {
                 while let Ok(mut task) = rx.recv() {
                     if let Err(err) = task.run(config.clone()).await {
-                        task.response = Some(TaskResponse::Error(err.to_string()));
+                        task.response = Some(UserEvent::Error(err.to_string()));
                     }
                     let mut store = inner_store.lock().unwrap();
                     store.push(task);
@@ -125,13 +135,7 @@ impl Poll<UserEventIter> for TaskHandler {
 
         let events = completed
             .drain(..)
-            .filter_map(|task| match task.response {
-                Some(TaskResponse::ProviderStatus(status)) => {
-                    Some(UserEvent::ProviderStatus(status))
-                }
-                Some(TaskResponse::Error(err)) => Some(UserEvent::Error(err)),
-                _ => None,
-            })
+            .filter_map(|task| task.response)
             .collect::<Vec<_>>();
 
         Ok(Some(Event::User(UserEventIter::new(events))))
