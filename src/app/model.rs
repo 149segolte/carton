@@ -6,7 +6,7 @@ use tuirealm::{
     Application, AttrValue, Attribute, EventListenerCfg, Sub, SubClause, SubEventClause, Update,
 };
 
-use crate::app::tasks::{SingletonTasks, Task, TaskHandler, TaskRequest};
+use crate::app::tasks::{Task, TaskHandler, TaskRequest};
 use crate::components::input::TextInput;
 use crate::components::label::TextLabel;
 use crate::components::list::ServerList;
@@ -17,83 +17,27 @@ pub struct Model {
     pub app: Application<Id, Msg, UserEventIter>,
     pub quit: bool,
     pub redraw: bool,
-    pub data: Config,
+    pub config: Config,
     pub tasks: TaskHandler,
     pub terminal: TerminalBridge,
 }
 
-impl Default for Model {
-    fn default() -> Self {
-        let (app, task_handler) = Self::init_app();
+impl Model {
+    pub fn new(args: Args) -> Self {
+        let (app, task_handler, config) = Self::init_app(args);
         Self {
             app,
             quit: false,
             redraw: true,
-            data: Config::default(),
+            config,
             tasks: task_handler,
             terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
         }
     }
-}
 
-impl Model {
-    pub fn new(args: Args) -> Self {
-        Self {
-            data: Config::new(args),
-            ..Self::default()
-        }
-    }
-
-    pub fn view(&mut self) {
-        assert!(self
-            .terminal
-            .raw_mut()
-            .draw(|f| {
-                let chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(0)
-                    .constraints(
-                        [
-                            Constraint::Length(8),  // Header
-                            Constraint::Length(12), // List
-                            Constraint::Fill(1),    // UI
-                            Constraint::Length(3),  // Label
-                        ]
-                        .as_ref(),
-                    )
-                    .split(f.size());
-                self.app.view(&Id::Header, f, chunks[0]);
-                self.app.view(&Id::ServerList, f, chunks[1]);
-                self.app.view(&Id::Label, f, chunks[3]);
-
-                let ui_chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .margin(0)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                    .split(chunks[2]);
-                self.app.view(&Id::Preview, f, ui_chunks[1]);
-
-                let input_chunks = Layout::default()
-                    .direction(Direction::Vertical)
-                    .margin(0)
-                    .constraints(
-                        [
-                            Constraint::Length(3),
-                            Constraint::Length(3),
-                            Constraint::Length(3),
-                        ]
-                        .as_ref(),
-                    )
-                    .split(ui_chunks[0]);
-                self.app.view(&Id::TextInput1, f, input_chunks[0]);
-                self.app.view(&Id::TextInput2, f, input_chunks[1]);
-                self.app.view(&Id::TextInput3, f, input_chunks[2]);
-            })
-            .is_ok());
-    }
-
-    fn init_app() -> (Application<Id, Msg, UserEventIter>, TaskHandler) {
-        let task_handler = TaskHandler::new();
+    fn init_app(args: Args) -> (Application<Id, Msg, UserEventIter>, TaskHandler, Config) {
+        let config = Config::new(args);
+        let task_handler = TaskHandler::new(config.clone());
 
         let mut app: Application<Id, Msg, UserEventIter> = Application::init(
             EventListenerCfg::default()
@@ -171,7 +115,55 @@ impl Model {
             )
             .is_ok());
 
-        (app, task_handler)
+        (app, task_handler, config)
+    }
+
+    pub fn view(&mut self) {
+        assert!(self
+            .terminal
+            .raw_mut()
+            .draw(|f| {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(0)
+                    .constraints(
+                        [
+                            Constraint::Length(8),  // Header
+                            Constraint::Length(12), // List
+                            Constraint::Fill(1),    // UI
+                            Constraint::Length(3),  // Label
+                        ]
+                        .as_ref(),
+                    )
+                    .split(f.size());
+                self.app.view(&Id::Header, f, chunks[0]);
+                self.app.view(&Id::ServerList, f, chunks[1]);
+                self.app.view(&Id::Label, f, chunks[3]);
+
+                let ui_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .margin(0)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+                    .split(chunks[2]);
+                self.app.view(&Id::Preview, f, ui_chunks[1]);
+
+                let input_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .margin(0)
+                    .constraints(
+                        [
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                            Constraint::Length(3),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(ui_chunks[0]);
+                self.app.view(&Id::TextInput1, f, input_chunks[0]);
+                self.app.view(&Id::TextInput2, f, input_chunks[1]);
+                self.app.view(&Id::TextInput3, f, input_chunks[2]);
+            })
+            .is_ok());
     }
 
     pub fn terminate(&mut self) {
@@ -228,9 +220,9 @@ impl Update<Msg> for Model {
                     None
                 }
                 Msg::UpdateProviderStatus => {
-                    self.tasks.clone().add_task(Task::new(TaskRequest::Single(
-                        SingletonTasks::ProviderStatus(self.data.auth.clone()),
-                    )));
+                    self.tasks
+                        .clone()
+                        .add_task(Task::new(TaskRequest::ProviderStatus));
 
                     // Update label
                     assert!(self

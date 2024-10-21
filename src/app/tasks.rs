@@ -7,26 +7,14 @@ use hcloud::apis::{primary_ips_api, servers_api};
 use tokio::runtime::Runtime;
 use tuirealm::listener::{ListenerResult, Poll};
 use tuirealm::Event;
-use uuid::Uuid;
 
-use crate::constants::{Auth, ProviderStatus, UserEvent, UserEventIter};
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub enum SingletonTasks {
-    ProviderStatus(Auth),
-    FetchServers(Auth),
-    Nop,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
-pub enum Tasks {
-    Nop,
-}
+use crate::constants::{Config, ProviderStatus, UserEvent, UserEventIter};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum TaskRequest {
-    Single(SingletonTasks),
-    Multiple(Uuid, Tasks),
+    ProviderStatus,
+    FetchServers,
+    Nop,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
@@ -45,7 +33,7 @@ pub struct Task {
 impl Default for Task {
     fn default() -> Self {
         Self {
-            request: TaskRequest::Single(SingletonTasks::Nop),
+            request: TaskRequest::Nop,
             response: None,
         }
     }
@@ -59,38 +47,34 @@ impl Task {
         }
     }
 
-    async fn run(&mut self) -> Result<()> {
-        if let TaskRequest::Single(task) = &self.request {
-            match task {
-                SingletonTasks::ProviderStatus(auth) => {
-                    let mut overview = ProviderStatus::new(auth.auth.clone());
+    async fn run(&mut self, config: Config) -> Result<()> {
+        match &self.request {
+            TaskRequest::ProviderStatus => {
+                let mut overview = ProviderStatus::new(config.auth.auth.clone());
 
-                    let mut configuration = Configuration::new();
-                    configuration.bearer_access_token = Some(auth.token.to_string());
+                let mut configuration = Configuration::new();
+                configuration.bearer_access_token = Some(config.auth.token.to_string());
 
-                    let resp = servers_api::list_servers(&configuration, Default::default()).await;
-                    if resp.is_ok() {
-                        overview.servers = resp.unwrap().servers.len();
-                    } else {
-                        overview.status = format!("Disconnected, Error: {:?}", resp.err().unwrap());
-                    }
-
-                    let resp =
-                        primary_ips_api::list_primary_ips(&configuration, Default::default()).await;
-                    if resp.is_ok() {
-                        overview.primary_ips = resp.unwrap().primary_ips.len();
-                    } else {
-                        overview.status = format!("Disconnected, Error: {:?}", resp.err().unwrap());
-                    }
-
-                    self.response = Some(TaskResponse::ProviderStatus(overview));
+                let resp = servers_api::list_servers(&configuration, Default::default()).await;
+                if resp.is_ok() {
+                    overview.servers = resp.unwrap().servers.len();
+                } else {
+                    overview.status = format!("Disconnected, Error: {:?}", resp.err().unwrap());
                 }
-                _ => {
-                    self.response = Some(TaskResponse::Empty);
+
+                let resp =
+                    primary_ips_api::list_primary_ips(&configuration, Default::default()).await;
+                if resp.is_ok() {
+                    overview.primary_ips = resp.unwrap().primary_ips.len();
+                } else {
+                    overview.status = format!("Disconnected, Error: {:?}", resp.err().unwrap());
                 }
+
+                self.response = Some(TaskResponse::ProviderStatus(overview));
             }
-        } else {
-            self.response = Some(TaskResponse::Empty);
+            _ => {
+                self.response = Some(TaskResponse::Empty);
+            }
         }
         Ok(())
     }
@@ -103,7 +87,7 @@ pub struct TaskHandler {
 }
 
 impl TaskHandler {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
         let (tx, rx) = mpsc::channel::<Task>();
         let store = Arc::new(Mutex::new(Vec::new()));
 
@@ -112,7 +96,7 @@ impl TaskHandler {
             let rt = Runtime::new().unwrap();
             rt.block_on(async {
                 while let Ok(mut task) = rx.recv() {
-                    if let Err(err) = task.run().await {
+                    if let Err(err) = task.run(config.clone()).await {
                         task.response = Some(TaskResponse::Error(err.to_string()));
                     }
                     let mut store = inner_store.lock().unwrap();
