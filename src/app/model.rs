@@ -5,7 +5,7 @@ use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
 
 use crate::app::interface::Interface;
 use crate::app::tasks::{Task, TaskHandler, Tasks};
-use crate::constants::{Args, Config, Id, Msg, UserEvent, UserEventIter};
+use crate::constants::{Args, Config, Id, InterfaceMsg, Msg, State, UserEventIter};
 
 pub struct Model {
     pub app: Application<Id, Msg, UserEventIter>,
@@ -83,7 +83,8 @@ impl Update<Msg> for Model {
                         .is_ok());
 
                     // Update UI
-                    self.interface.perform(&mut self.app, Msg::Connected)
+                    self.interface
+                        .perform(&mut self.app, InterfaceMsg::Connected)
                 }
                 Msg::Disconnected => {
                     // Update label
@@ -97,7 +98,8 @@ impl Update<Msg> for Model {
                         .is_ok());
 
                     // Update UI
-                    self.interface.perform(&mut self.app, Msg::Disconnected)
+                    self.interface
+                        .perform(&mut self.app, InterfaceMsg::Disconnected)
                 }
                 Msg::ChangeFocus => {
                     // Update label
@@ -114,18 +116,25 @@ impl Update<Msg> for Model {
                     self.interface.change_focus(&mut self.app);
                     None
                 }
-                Msg::UpdateState(event) => {
+                Msg::UpdateState(state) => {
                     // Update label
                     assert!(self
                         .app
                         .attr(
                             &Id::Label,
                             Attribute::Text,
-                            AttrValue::String(format!("State update: {:?}", event))
+                            AttrValue::String(format!("State update: {:?}", state))
                         )
                         .is_ok());
 
-                    None
+                    match state {
+                        State::SelectedServer(server) => {
+                            // Update UI
+                            self.interface
+                                .perform(&mut self.app, InterfaceMsg::SelectedServer(server))
+                        }
+                        State::Empty => None,
+                    }
                 }
                 Msg::Input(id, input) => {
                     // Update label

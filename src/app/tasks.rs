@@ -77,7 +77,7 @@ impl Task {
                         resp.unwrap()
                             .servers
                             .iter()
-                            .map(|s| ServerHandle::Hetzner(s.clone()))
+                            .map(|s| ServerHandle::Hetzner(Box::new(s.clone())))
                             .collect(),
                     )));
                 }

@@ -3,10 +3,10 @@ use hcloud::models::{server::Status, Server};
 use tuirealm::Component;
 
 use crate::components::{
-    container::Header,
+    container::{Header, Preview},
     input::TextInput,
     label::TextLabel,
-    paragraph::{Preview, ServerListDisconnected},
+    paragraph::ServerListDisconnected,
     table::ServerListConnected,
 };
 
@@ -27,10 +27,17 @@ pub enum Msg {
     Connected,
     Disconnected,
     ChangeFocus,
-    UpdateState(UserEvent),
+    UpdateState(State),
     Input(Id, String),
     UpdateProviderStatus,
     FetchServers,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum InterfaceMsg {
+    Connected,
+    Disconnected,
+    SelectedServer(ServerHandle),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
@@ -48,7 +55,8 @@ pub enum Id {
 pub enum Components {
     Header(Header),
     TextInput(TextInput),
-    Preview(Preview),
+    ServerPreview(Preview),
+    CreateServerForm,
     TextLabel(TextLabel),
     ServerListConnected(ServerListConnected),
     ServerListDisconnected(ServerListDisconnected),
@@ -59,10 +67,11 @@ impl Components {
         match self {
             Components::Header(c) => Box::new(c),
             Components::TextInput(c) => Box::new(c),
-            Components::Preview(c) => Box::new(c),
+            Components::ServerPreview(c) => Box::new(c),
             Components::TextLabel(c) => Box::new(c),
             Components::ServerListConnected(c) => Box::new(c),
             Components::ServerListDisconnected(c) => Box::new(c),
+            Components::CreateServerForm => Box::new(TextInput::new(Id::TextInput1)),
         }
     }
 }
@@ -123,7 +132,14 @@ impl Config {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum State {
+    SelectedServer(ServerHandle),
+    #[default]
+    Empty,
+}
+
+#[derive(Debug, Clone)]
 pub struct ProviderStatus {
     pub name: String,
     pub status: String,
@@ -164,14 +180,35 @@ pub struct ServerStatus {
 }
 
 #[derive(Debug, Clone)]
+pub struct ServerPreview {
+    pub provider: String,
+    pub created_on: String,
+    pub datacenter: String,
+    pub image: String,
+    pub tags: String,
+    pub name: String,
+    pub traffic: (f32, f32),
+    pub disk_size: i32,
+    pub server_type: String,
+    pub status: String,
+}
+
+impl ServerPreview {
+    pub const fn count() -> usize {
+        10
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ServerHandle {
-    Hetzner(Server),
+    Hetzner(Box<Server>),
+    Create,
 }
 
 impl ServerHandle {
-    pub fn to_status(&self) -> ServerStatus {
+    pub fn to_status(&self) -> Option<ServerStatus> {
         match self {
-            ServerHandle::Hetzner(server) => ServerStatus {
+            ServerHandle::Hetzner(server) => Some(ServerStatus {
                 name: server.name.clone(),
                 status: if server.status == Status::Running {
                     "Online".to_string()
@@ -183,7 +220,33 @@ impl ServerHandle {
                 } else {
                     "Private".to_string()
                 },
-            },
+            }),
+            _ => None,
+        }
+    }
+
+    pub fn to_preview(&self) -> Option<ServerPreview> {
+        match self {
+            ServerHandle::Hetzner(server) => Some(ServerPreview {
+                provider: "Hetzner".to_string(),
+                created_on: server.created.clone(),
+                datacenter: server.datacenter.name.clone(),
+                image: if let Some(image) = server.image.as_ref() {
+                    image.name.clone().unwrap_or("Unknown".to_string())
+                } else {
+                    "Unknown".to_string()
+                },
+                tags: format!("{:?}", server.labels),
+                name: server.name.clone(),
+                traffic: (
+                    server.ingoing_traffic.unwrap_or(0) as f32 / 1024.0,
+                    server.outgoing_traffic.unwrap_or(0) as f32 / 1024.0,
+                ),
+                disk_size: server.primary_disk_size,
+                server_type: server.server_type.name.clone(),
+                status: format!("{:?}", server.status),
+            }),
+            _ => None,
         }
     }
 }
@@ -203,6 +266,7 @@ impl ServerListStatus {
 pub enum UserEvent {
     ProviderStatus(ProviderStatus),
     ServerListStatus(ServerListStatus),
+    #[allow(dead_code)]
     Error(String),
     Empty,
 }

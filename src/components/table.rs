@@ -4,12 +4,12 @@ use tuirealm::event::{Key, KeyEvent};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, TableBuilder, TextSpan};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::constants::{Msg, ServerHandle, ServerListStatus, UserEvent, UserEventIter};
+use crate::constants::{Msg, ServerHandle, ServerListStatus, State, UserEvent, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct ServerListConnected {
     component: Table,
-    servers: Vec<ServerHandle>,
+    servers: Option<Vec<ServerHandle>>,
 }
 
 impl Default for ServerListConnected {
@@ -21,7 +21,7 @@ impl Default for ServerListConnected {
                         .modifiers(BorderType::Rounded)
                         .color(Color::Yellow),
                 )
-                .title("Servers List", Alignment::Center)
+                .title(" Servers List ", Alignment::Center)
                 .scroll(true)
                 .highlighted_color(Color::LightYellow)
                 .highlighted_str(">")
@@ -43,24 +43,29 @@ impl Default for ServerListConnected {
                         .add_row()
                         .build(),
                 ),
-            servers: Vec::default(),
+            servers: None,
         }
     }
 }
 
 impl ServerListConnected {
     fn update_status(&mut self, status: ServerListStatus) {
-        self.servers = status.servers;
+        self.servers = Some(status.servers);
         let mut table = TableBuilder::default();
-        self.servers.iter().enumerate().for_each(|(index, server)| {
-            let status = server.to_status();
-            table
-                .add_col(TextSpan::new(format!("{}", index + 1)))
-                .add_col(TextSpan::new(&status.name))
-                .add_col(TextSpan::new(&status.status))
-                .add_col(TextSpan::new(&status.ip))
-                .add_row();
-        });
+        self.servers
+            .as_ref()
+            .unwrap()
+            .iter()
+            .enumerate()
+            .for_each(|(index, server)| {
+                let status = server.to_status().unwrap();
+                table
+                    .add_col(TextSpan::new(format!("{}", index + 1)))
+                    .add_col(TextSpan::new(&status.name))
+                    .add_col(TextSpan::new(&status.status))
+                    .add_col(TextSpan::new(&status.ip))
+                    .add_row();
+            });
         table
             .add_col(TextSpan::new("+"))
             .add_col(TextSpan::new("Create a new server"))
@@ -96,12 +101,27 @@ impl Component<Msg, UserEventIter> for ServerListConnected {
                         self.update_status(status);
                     }
                 }
-                return Some(Msg::Nop);
+                Cmd::Change
             }
             _ => Cmd::None,
         };
 
         self.perform(cmd);
-        Some(Msg::Nop)
+
+        let selected = self.component.state().unwrap_one().unwrap_usize();
+        let state = match self.servers {
+            Some(ref servers) => {
+                if selected < servers.len() {
+                    State::SelectedServer(servers[selected].clone())
+                } else {
+                    State::SelectedServer(ServerHandle::Create)
+                }
+            }
+            None => State::default(),
+        };
+        match cmd {
+            Cmd::None => None,
+            _ => Some(Msg::UpdateState(state)),
+        }
     }
 }

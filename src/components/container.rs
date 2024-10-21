@@ -5,7 +5,7 @@ use tuirealm::tui::layout::{Constraint, Direction};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
 use crate::components::span::TextBox;
-use crate::constants::{Msg, ProviderStatus, UserEvent, UserEventIter};
+use crate::constants::{Msg, ProviderStatus, ServerPreview, UserEvent, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct Header {
@@ -127,6 +127,97 @@ impl Component<Msg, UserEventIter> for Header {
         }
 
         self.perform(cmd);
+        None
+    }
+}
+
+#[derive(MockComponent)]
+pub struct Preview {
+    component: Container,
+}
+
+impl Default for Preview {
+    fn default() -> Self {
+        Self {
+            component: Container::default()
+                .background(Color::Reset)
+                .foreground(Color::Reset)
+                .title(" Preview ", Alignment::Left)
+                .children(vec![Box::new(TextBox::default())])
+                .layout(
+                    Layout::default()
+                        .direction(Direction::Vertical)
+                        .margin(2)
+                        .constraints([Constraint::Length(2)].as_ref()),
+                ),
+        }
+    }
+}
+
+impl Preview {
+    pub fn new(server: ServerPreview) -> Self {
+        Self {
+            component: Container::default()
+                .background(Color::Reset)
+                .foreground(Color::Reset)
+                .title(" Preview ", Alignment::Left)
+                .children(vec![
+                    Box::new(TextBox::new(&[TextSpan::new(format!(
+                        " {}: ",
+                        server.name
+                    ))])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Status: "),
+                        TextSpan::new(server.status),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Provider: "),
+                        TextSpan::new(server.provider),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Created On: "),
+                        TextSpan::new(server.created_on),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Datacenter: "),
+                        TextSpan::new(server.datacenter),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Image: "),
+                        TextSpan::new(server.image),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Tags: "),
+                        TextSpan::new(server.tags),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Traffic: "),
+                        TextSpan::new(format!(
+                            "{:.2} KB in, {:.2} KB out",
+                            server.traffic.0, server.traffic.1
+                        )),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Disk Size: "),
+                        TextSpan::new(format!("{} GB", server.disk_size)),
+                    ])),
+                    Box::new(TextBox::new(&[
+                        TextSpan::new("   Server Type: "),
+                        TextSpan::new(server.server_type),
+                    ])),
+                ])
+                .layout(
+                    Layout::default()
+                        .direction(Direction::Vertical)
+                        .margin(2)
+                        .constraints([Constraint::Length(1); ServerPreview::count()].as_ref()),
+                ),
+        }
+    }
+}
+
+impl Component<Msg, UserEventIter> for Preview {
+    fn on(&mut self, _: Event<UserEventIter>) -> Option<Msg> {
         None
     }
 }
