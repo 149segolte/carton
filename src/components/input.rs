@@ -1,15 +1,17 @@
+use std::ops::Index;
+
 use tui_realm_stdlib::Input;
 use tuirealm::command::{Cmd, CmdResult, Direction, Position};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use tuirealm::props::{Alignment, BorderType, Borders, Color, InputType, Style};
-use tuirealm::{Component, Event, MockComponent};
+use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::constants::{Id, Msg, UserEventIter};
+use crate::constants::{InputId, Msg, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct TextInput {
     component: Input,
-    id: Option<Id>,
+    id: Option<InputId>,
 }
 
 impl Default for TextInput {
@@ -30,15 +32,9 @@ impl Default for TextInput {
 }
 
 impl TextInput {
-    pub fn new(id: Id) -> Self {
-        let title = match id {
-            Id::TextInput1 => " Name ",
-            Id::TextInput2 => " Region ",
-            Id::TextInput3 => " Image ",
-            _ => "",
-        };
+    pub fn new(id: InputId, title: &str) -> Self {
         Self {
-            id: Some(id.clone()),
+            id: Some(id),
             component: Input::default()
                 .borders(
                     Borders::default()
@@ -49,6 +45,28 @@ impl TextInput {
                 .foreground(Color::LightYellow)
                 .input_type(InputType::Text)
                 .invalid_style(Style::default().fg(Color::Red)),
+        }
+    }
+
+    fn perform(&mut self, cmd: Cmd) -> CmdResult {
+        match cmd {
+            Cmd::Custom(s) => {
+                let chunks = s.split(":").take(2).collect::<Vec<_>>();
+                let action = chunks.index(0);
+                let target = chunks.index(1);
+                if *action == "focus" {
+                    if let Some(id) = self.id.as_ref() {
+                        if id.to_string() == *target {
+                            self.component.attr(Attribute::Focus, AttrValue::Flag(true));
+                        } else {
+                            self.component
+                                .attr(Attribute::Focus, AttrValue::Flag(false));
+                        }
+                    }
+                }
+                CmdResult::Custom(s)
+            }
+            _ => self.component.perform(cmd),
         }
     }
 }

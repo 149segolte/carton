@@ -1,10 +1,11 @@
+use std::str::FromStr;
+
 use clap::Parser;
 use hcloud::models::{server::Status, Server};
 use tuirealm::Component;
 
 use crate::components::{
-    container::{Header, Preview},
-    input::TextInput,
+    container::{CreateServerForm, Header, Preview},
     label::TextLabel,
     paragraph::ServerListDisconnected,
     table::ServerListConnected,
@@ -21,14 +22,14 @@ pub struct Args {
 
 #[derive(Debug, PartialEq)]
 pub enum Msg {
-    Nop,
+    Nop(usize),
     Launch,
     AppClose,
     Connected,
     Disconnected,
-    ChangeFocus,
+    ChangeFocus(bool),
     UpdateState(State),
-    Input(Id, String),
+    Input(InputId, String),
     UpdateProviderStatus,
     FetchServers,
 }
@@ -40,12 +41,46 @@ pub enum InterfaceMsg {
     SelectedServer(ServerHandle),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputId {
+    CreateServerName,
+    CreateServerDatacenter,
+    CreateServerImage,
+    CreateServerType,
+    #[allow(dead_code)]
+    Empty,
+}
+
+impl std::fmt::Display for InputId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InputId::CreateServerName => write!(f, "CreateServerName"),
+            InputId::CreateServerDatacenter => write!(f, "CreateServerDatacenter"),
+            InputId::CreateServerImage => write!(f, "CreateServerImage"),
+            InputId::CreateServerType => write!(f, "CreateServerType"),
+            InputId::Empty => write!(f, "Empty"),
+        }
+    }
+}
+
+impl FromStr for InputId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "CreateServerName" => Ok(InputId::CreateServerName),
+            "CreateServerDatacenter" => Ok(InputId::CreateServerDatacenter),
+            "CreateServerImage" => Ok(InputId::CreateServerImage),
+            "CreateServerType" => Ok(InputId::CreateServerType),
+            "Empty" => Ok(InputId::Empty),
+            _ => Err("Invalid input id".to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum Id {
     Header,
-    TextInput1,
-    TextInput2,
-    TextInput3,
     Preview,
     Label,
     ServerList,
@@ -54,9 +89,8 @@ pub enum Id {
 
 pub enum Components {
     Header(Header),
-    TextInput(TextInput),
     ServerPreview(Preview),
-    CreateServerForm,
+    CreateServerForm(CreateServerForm),
     TextLabel(TextLabel),
     ServerListConnected(ServerListConnected),
     ServerListDisconnected(ServerListDisconnected),
@@ -66,12 +100,11 @@ impl Components {
     pub fn unwrap(self) -> Box<dyn Component<Msg, UserEventIter>> {
         match self {
             Components::Header(c) => Box::new(c),
-            Components::TextInput(c) => Box::new(c),
             Components::ServerPreview(c) => Box::new(c),
             Components::TextLabel(c) => Box::new(c),
             Components::ServerListConnected(c) => Box::new(c),
             Components::ServerListDisconnected(c) => Box::new(c),
-            Components::CreateServerForm => Box::new(TextInput::new(Id::TextInput1)),
+            Components::CreateServerForm(c) => Box::new(c),
         }
     }
 }

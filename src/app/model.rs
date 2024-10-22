@@ -38,7 +38,7 @@ impl Model {
             EventListenerCfg::default()
                 .default_input_listener(Duration::from_millis(20))
                 .poll_timeout(Duration::from_millis(10))
-                .tick_interval(Duration::from_secs(1))
+                .tick_interval(Duration::from_millis(250))
                 .port(Box::new(task_handler.clone()), Duration::from_millis(100)),
         );
 
@@ -65,7 +65,13 @@ impl Update<Msg> for Model {
             self.redraw = true;
             // Match message
             match msg {
-                Msg::Nop => None,
+                Msg::Nop(count) => {
+                    if count > 0 {
+                        Some(Msg::Nop(count - 1))
+                    } else {
+                        None
+                    }
+                }
                 Msg::Launch => Some(Msg::UpdateProviderStatus),
                 Msg::AppClose => {
                     self.quit = true; // Terminate
@@ -101,7 +107,7 @@ impl Update<Msg> for Model {
                     self.interface
                         .perform(&mut self.app, InterfaceMsg::Disconnected)
                 }
-                Msg::ChangeFocus => {
+                Msg::ChangeFocus(outer) => {
                     // Update label
                     assert!(self
                         .app
@@ -113,8 +119,7 @@ impl Update<Msg> for Model {
                         .is_ok());
 
                     // Update UI
-                    self.interface.change_focus(&mut self.app);
-                    None
+                    self.interface.change_focus(&mut self.app, outer)
                 }
                 Msg::UpdateState(state) => {
                     // Update label

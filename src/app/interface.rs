@@ -2,8 +2,7 @@ use tuirealm::terminal::TerminalBridge;
 use tuirealm::tui::layout::{Constraint, Direction, Layout};
 use tuirealm::{Application, AttrValue, Attribute, Sub, SubClause, SubEventClause};
 
-use crate::components::container::{Header, Preview};
-use crate::components::input::TextInput;
+use crate::components::container::{CreateServerForm, Header, Preview};
 use crate::components::label::TextLabel;
 use crate::components::paragraph::ServerListDisconnected;
 use crate::components::phantom::PhantomHandler;
@@ -28,7 +27,6 @@ impl Interface {
                 )])),
                 SubClause::Always,
             )],
-            Components::ServerPreview(_) => vec![Sub::new(SubEventClause::Tick, SubClause::Always)],
             Components::ServerListConnected(_) => {
                 vec![Sub::new(
                     SubEventClause::User(UserEventIter::new(vec![UserEvent::ServerListStatus(
@@ -36,6 +34,9 @@ impl Interface {
                     )])),
                     SubClause::Always,
                 )]
+            }
+            Components::CreateServerForm(_) => {
+                vec![Sub::new(SubEventClause::Tick, SubClause::Always)]
             }
             _ => Vec::default(),
         };
@@ -59,21 +60,6 @@ impl Interface {
                     app,
                     Id::Preview,
                     Components::ServerPreview(Preview::default()),
-                );
-                self.mount(
-                    app,
-                    Id::TextInput1,
-                    Components::TextInput(TextInput::new(Id::TextInput1)),
-                );
-                self.mount(
-                    app,
-                    Id::TextInput2,
-                    Components::TextInput(TextInput::new(Id::TextInput2)),
-                );
-                self.mount(
-                    app,
-                    Id::TextInput3,
-                    Components::TextInput(TextInput::new(Id::TextInput3)),
                 );
                 self.mount(app, Id::Label, Components::TextLabel(TextLabel::default()));
 
@@ -123,24 +109,45 @@ impl Interface {
         }
     }
 
-    pub fn change_focus(&self, app: &mut Application<Id, Msg, UserEventIter>) {
+    pub fn change_focus(
+        &self,
+        app: &mut Application<Id, Msg, UserEventIter>,
+        outer: bool,
+    ) -> Option<Msg> {
         match self {
             Interface::Status => {
                 if let Some(current_active) = app.focus() {
                     match current_active {
                         Id::Header => {
                             assert!(app.active(&Id::ServerList).is_ok());
+                            None
                         }
                         Id::ServerList => {
                             assert!(app.active(&Id::Preview).is_ok());
+                            None
                         }
                         Id::Preview => {
-                            assert!(app.active(&Id::Header).is_ok());
+                            if outer {
+                                assert!(app.active(&Id::Header).is_ok());
+                                None
+                            } else {
+                                assert!(app
+                                    .attr(
+                                        &Id::Preview,
+                                        Attribute::Custom("change_focus"),
+                                        AttrValue::Flag(true),
+                                    )
+                                    .is_ok());
+                                Some(Msg::Nop(2))
+                            }
                         }
                         _ => {
                             assert!(app.active(&Id::Header).is_ok());
+                            None
                         }
                     }
+                } else {
+                    None
                 }
             }
         }
@@ -186,7 +193,11 @@ impl Interface {
 
                     match server {
                         ServerHandle::Create => {
-                            self.mount(app, Id::Preview, Components::CreateServerForm);
+                            self.mount(
+                                app,
+                                Id::Preview,
+                                Components::CreateServerForm(CreateServerForm::default()),
+                            );
                         }
                         other => {
                             self.mount(
