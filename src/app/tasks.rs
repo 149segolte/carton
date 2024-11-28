@@ -3,7 +3,8 @@ use std::thread;
 
 use anyhow::Result;
 use hcloud::apis::configuration::Configuration;
-use hcloud::apis::{primary_ips_api, servers_api};
+use hcloud::apis::{primary_ips_api, servers_api, ssh_keys_api};
+use hcloud::models::{CreateServerRequest, CreateServerRequestPublicNet};
 use tokio::runtime::Runtime;
 use tuirealm::listener::{ListenerResult, Poll};
 use tuirealm::Event;
@@ -12,10 +13,15 @@ use crate::constants::{
     Config, ProviderStatus, ServerHandle, ServerListStatus, UserEvent, UserEventIter,
 };
 
+const IMAGE: &str = "fedora-41";
+const LOCATION: &str = "fsn1";
+
 #[derive(Debug, Clone)]
 pub enum Tasks {
     ProviderStatus,
     FetchServers,
+    #[allow(dead_code)]
+    CreateServer(String, String, String),
     Nop,
 }
 
@@ -80,6 +86,54 @@ impl Task {
                             .map(|s| ServerHandle::Hetzner(Box::new(s.clone())))
                             .collect(),
                     )));
+                }
+            }
+            Tasks::CreateServer(name, server, _) => {
+                let mut configuration = Configuration::new();
+                configuration.bearer_access_token = Some(config.auth.token.to_string());
+
+                let ssh_keys =
+                    ssh_keys_api::list_ssh_keys(&configuration, Default::default()).await;
+                if ssh_keys.is_err() {
+                    self.response = Some(UserEvent::Error(format!(
+                        "Cannot fetch ssh keys: {:?}",
+                        ssh_keys.as_ref().err().unwrap()
+                    )));
+                    return Ok(());
+                }
+                let ssh_keys: Vec<String> = ssh_keys
+                    .unwrap()
+                    .ssh_keys
+                    .into_iter()
+                    .map(|ssh_key| ssh_key.name)
+                    .collect();
+
+                let request = CreateServerRequest {
+                    name: name.to_string(),
+                    server_type: server.to_string(),
+                    start_after_create: Some(true),
+                    image: IMAGE.to_string(),
+                    ssh_keys: Some(ssh_keys.clone()),
+                    location: Some(LOCATION.to_string()),
+                    public_net: Some(Box::new(CreateServerRequestPublicNet {
+                        enable_ipv4: Some(false),
+                        ..Default::default()
+                    })),
+                    ..Default::default()
+                };
+
+                // execute request and store server ID
+                let params = servers_api::CreateServerParams {
+                    create_server_request: Some(request),
+                };
+                let server = servers_api::create_server(&configuration, params).await;
+                if server.is_err() {
+                    self.response = Some(UserEvent::Error(format!(
+                        "Cannot create server: {:?}",
+                        server.as_ref().err().unwrap()
+                    )));
+                } else {
+                    self.response = Some(UserEvent::Refresh);
                 }
             }
             Tasks::Nop => {

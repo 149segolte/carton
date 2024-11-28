@@ -5,7 +5,7 @@ use tuirealm::{Application, AttrValue, Attribute, EventListenerCfg, Update};
 
 use crate::app::interface::Interface;
 use crate::app::tasks::{Task, TaskHandler, Tasks};
-use crate::constants::{Args, Config, Id, InterfaceMsg, Msg, State, UserEventIter};
+use crate::constants::{Args, Config, Id, InterfaceMsg, Msg, ServerHandle, State, UserEventIter};
 
 pub struct Model {
     pub app: Application<Id, Msg, UserEventIter>,
@@ -18,21 +18,10 @@ pub struct Model {
 
 impl Model {
     pub fn new(args: Args) -> Self {
-        let (app, task_handler, interface) = Self::init_app(args);
-        Self {
-            app,
-            quit: false,
-            redraw: true,
-            tasks: task_handler,
-            interface,
-            terminal: TerminalBridge::new().expect("Cannot initialize terminal"),
-        }
-    }
-
-    fn init_app(args: Args) -> (Application<Id, Msg, UserEventIter>, TaskHandler, Interface) {
         let config = Config::new(args);
         let task_handler = TaskHandler::new(config.clone());
         let interface = Interface::default();
+        let mut terminal = TerminalBridge::new().expect("Cannot initialize terminal");
 
         let mut app: Application<Id, Msg, UserEventIter> = Application::init(
             EventListenerCfg::default()
@@ -41,10 +30,16 @@ impl Model {
                 .tick_interval(Duration::from_millis(250))
                 .port(Box::new(task_handler.clone()), Duration::from_millis(100)),
         );
+        interface.init(&mut app, &mut terminal);
 
-        interface.init(&mut app);
-
-        (app, task_handler, interface)
+        Self {
+            app,
+            quit: false,
+            redraw: true,
+            tasks: task_handler,
+            interface,
+            terminal,
+        }
     }
 
     pub fn view(&mut self) {
@@ -107,7 +102,7 @@ impl Update<Msg> for Model {
                     self.interface
                         .perform(&mut self.app, InterfaceMsg::Disconnected)
                 }
-                Msg::ChangeFocus(outer) => {
+                Msg::ChangeFocus() => {
                     // Update label
                     assert!(self
                         .app
@@ -119,7 +114,7 @@ impl Update<Msg> for Model {
                         .is_ok());
 
                     // Update UI
-                    self.interface.change_focus(&mut self.app, outer)
+                    self.interface.change_focus(&mut self.app)
                 }
                 Msg::UpdateState(state) => {
                     // Update label
@@ -134,9 +129,27 @@ impl Update<Msg> for Model {
 
                     match state {
                         State::SelectedServer(server) => {
-                            // Update UI
-                            self.interface
-                                .perform(&mut self.app, InterfaceMsg::SelectedServer(server))
+                            match server {
+                                ServerHandle::Create => {
+                                    // Update interface
+                                    if self.interface != Interface::Create {
+                                        self.interface = Interface::Create;
+                                        self.interface.init(&mut self.app, &mut self.terminal);
+                                    }
+                                    None
+                                }
+                                _ => {
+                                    // Update UI
+                                    if self.interface != Interface::Status {
+                                        self.interface = Interface::Status;
+                                        self.interface.init(&mut self.app, &mut self.terminal);
+                                    }
+                                    self.interface.perform(
+                                        &mut self.app,
+                                        InterfaceMsg::SelectedServer(server),
+                                    )
+                                }
+                            }
                         }
                         State::Empty => None,
                     }
@@ -151,6 +164,79 @@ impl Update<Msg> for Model {
                             AttrValue::String(format!("Input from {:?}: {:?}", id, input))
                         )
                         .is_ok());
+
+                    None
+                }
+                Msg::Submit => {
+                    let name = self
+                        .app
+                        .query(&Id::CreateServer1, Attribute::Custom("state"));
+                    assert!(name.is_ok());
+                    let name = name.unwrap().unwrap().unwrap_string();
+                    let srv_type = self
+                        .app
+                        .query(&Id::CreateServer2, Attribute::Custom("state"));
+                    assert!(srv_type.is_ok());
+                    let srv_type = srv_type.unwrap().unwrap().unwrap_string();
+                    let image = self
+                        .app
+                        .query(&Id::CreateServer3, Attribute::Custom("state"));
+                    assert!(image.is_ok());
+                    let image = image.unwrap().unwrap().unwrap_string();
+
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(
+                            &Id::Label,
+                            Attribute::Text,
+                            AttrValue::String(format!(
+                                "Creating server: {}, {}, {}",
+                                name, srv_type, image
+                            ))
+                        )
+                        .is_ok());
+
+                    if name.trim().is_empty() || !name.is_ascii() {
+                        // Update label
+                        assert!(self
+                            .app
+                            .attr(
+                                &Id::Label,
+                                Attribute::Text,
+                                AttrValue::String("Name invalid".to_string())
+                            )
+                            .is_ok());
+                    }
+
+                    if srv_type.trim().is_empty() || !srv_type.is_ascii() {
+                        // Update label
+                        assert!(self
+                            .app
+                            .attr(
+                                &Id::Label,
+                                Attribute::Text,
+                                AttrValue::String("Type invalid".to_string())
+                            )
+                            .is_ok());
+                    }
+
+                    if image.trim().is_empty() || !image.is_ascii() {
+                        // Update label
+                        assert!(self
+                            .app
+                            .attr(
+                                &Id::Label,
+                                Attribute::Text,
+                                AttrValue::String("Image invalid".to_string())
+                            )
+                            .is_ok());
+                    }
+
+                    // Trigger task
+                    self.tasks
+                        .clone()
+                        .add_task(Task::new(Tasks::CreateServer(name, srv_type, image)));
 
                     None
                 }
@@ -185,6 +271,15 @@ impl Update<Msg> for Model {
 
                     // Trigger task
                     self.tasks.clone().add_task(Task::new(Tasks::FetchServers));
+
+                    None
+                }
+                Msg::Info(msg) => {
+                    // Update label
+                    assert!(self
+                        .app
+                        .attr(&Id::Label, Attribute::Text, AttrValue::String(msg))
+                        .is_ok());
 
                     None
                 }

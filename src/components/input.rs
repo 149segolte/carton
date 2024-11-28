@@ -92,6 +92,9 @@ impl Component<Msg, UserEventIter> for TextInput {
                 ..
             }) => Cmd::Delete,
             Event::Keyboard(KeyEvent {
+                code: Key::Enter, ..
+            }) => Cmd::Submit,
+            Event::Keyboard(KeyEvent {
                 code: Key::Char(ch),
                 modifiers: KeyModifiers::NONE,
             }) => Cmd::Type(ch),
@@ -99,10 +102,15 @@ impl Component<Msg, UserEventIter> for TextInput {
         };
 
         match self.perform(cmd) {
-            CmdResult::Changed(state) => Some(Msg::Input(
-                self.id.clone().unwrap(),
-                state.unwrap_one().unwrap_string(),
-            )),
+            CmdResult::Changed(state) => {
+                let val = state.unwrap_one().unwrap_string();
+                self.attr(Attribute::Custom("state"), AttrValue::String(val.clone()));
+                Some(Msg::Input(self.id.clone().unwrap(), val))
+            }
+            CmdResult::Submit(_) => match self.id.clone().unwrap() {
+                InputId::CreateServerImage => Some(Msg::Submit),
+                _ => None,
+            },
             _ => None,
         }
     }

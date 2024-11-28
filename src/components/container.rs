@@ -4,9 +4,8 @@ use tuirealm::props::{Alignment, Color, Layout, PropPayload, PropValue, TextSpan
 use tuirealm::tui::layout::{Constraint, Direction};
 use tuirealm::{AttrValue, Attribute, Component, Event, MockComponent};
 
-use crate::components::input::TextInput;
 use crate::components::span::TextBox;
-use crate::constants::{InputId, Msg, ProviderStatus, ServerPreview, UserEvent, UserEventIter};
+use crate::constants::{Msg, ProviderStatus, ServerPreview, UserEvent, UserEventIter};
 
 #[derive(MockComponent)]
 pub struct Header {
@@ -115,6 +114,8 @@ impl Component<Msg, UserEventIter> for Header {
                             Msg::Disconnected
                         };
                         self.update_status(status);
+                    } else if let UserEvent::Refresh = ev {
+                        msg = Msg::UpdateProviderStatus;
                     }
                 }
                 return Some(msg);
@@ -220,83 +221,5 @@ impl Preview {
 impl Component<Msg, UserEventIter> for Preview {
     fn on(&mut self, _: Event<UserEventIter>) -> Option<Msg> {
         None
-    }
-}
-
-#[derive(MockComponent)]
-pub struct CreateServerForm {
-    component: Container,
-    focus_id: InputId,
-}
-
-impl Default for CreateServerForm {
-    fn default() -> Self {
-        Self {
-            component: Container::default()
-                .background(Color::Reset)
-                .foreground(Color::Reset)
-                .title(" Create Server ", Alignment::Left)
-                .children(vec![
-                    Box::new(TextInput::new(InputId::CreateServerName, " Name: ")),
-                    Box::new(TextInput::new(
-                        InputId::CreateServerDatacenter,
-                        " Datacenter: ",
-                    )),
-                    Box::new(TextInput::new(InputId::CreateServerImage, " Image: ")),
-                    Box::new(TextInput::new(InputId::CreateServerType, " Server Type: ")),
-                ])
-                .layout(
-                    Layout::default()
-                        .direction(Direction::Vertical)
-                        .margin(2)
-                        .constraints([Constraint::Length(3); 4].as_ref()),
-                ),
-            focus_id: InputId::CreateServerName,
-        }
-    }
-}
-
-impl CreateServerForm {
-    fn change_focus(&mut self, next: bool) -> (Option<Msg>, Option<Cmd>) {
-        if next {
-            self.focus_id = match self.focus_id {
-                InputId::CreateServerName => InputId::CreateServerDatacenter,
-                InputId::CreateServerDatacenter => InputId::CreateServerImage,
-                InputId::CreateServerImage => InputId::CreateServerType,
-                InputId::CreateServerType => InputId::CreateServerName,
-                _ => InputId::CreateServerName,
-            };
-            if self.focus_id == InputId::CreateServerName {
-                return (Some(Msg::ChangeFocus(true)), None);
-            }
-        }
-        (
-            None,
-            Some(Cmd::Custom(
-                ("focus:".to_owned() + &self.focus_id.to_string()).leak(),
-            )),
-        )
-    }
-}
-
-impl Component<Msg, UserEventIter> for CreateServerForm {
-    fn on(&mut self, event: Event<UserEventIter>) -> Option<Msg> {
-        let mut cmd = match event {
-            Event::Tick => self.change_focus(false).1.unwrap_or(Cmd::None),
-            _ => Cmd::None,
-        };
-
-        if let Some(AttrValue::Flag(true)) = self.query(Attribute::Custom("change_focus")) {
-            self.attr(Attribute::Custom("change_focus"), AttrValue::Flag(false));
-            let res = self.change_focus(true);
-            if res.0.is_some() {
-                return res.0;
-            } else {
-                cmd = res.1.unwrap();
-            }
-        }
-
-        self.perform(cmd);
-        Some(Msg::Nop(1))
     }
 }

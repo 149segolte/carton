@@ -5,7 +5,8 @@ use hcloud::models::{server::Status, Server};
 use tuirealm::Component;
 
 use crate::components::{
-    container::{CreateServerForm, Header, Preview},
+    container::{Header, Preview},
+    input::TextInput,
     label::TextLabel,
     paragraph::ServerListDisconnected,
     table::ServerListConnected,
@@ -27,11 +28,14 @@ pub enum Msg {
     AppClose,
     Connected,
     Disconnected,
-    ChangeFocus(bool),
+    ChangeFocus(),
     UpdateState(State),
     Input(InputId, String),
     UpdateProviderStatus,
     FetchServers,
+    Submit,
+    #[allow(dead_code)]
+    Info(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -85,12 +89,15 @@ pub enum Id {
     Label,
     ServerList,
     Phantom,
+    CreateServer1,
+    CreateServer2,
+    CreateServer3,
 }
 
 pub enum Components {
     Header(Header),
     ServerPreview(Preview),
-    CreateServerForm(CreateServerForm),
+    TextInput(TextInput),
     TextLabel(TextLabel),
     ServerListConnected(ServerListConnected),
     ServerListDisconnected(ServerListDisconnected),
@@ -101,10 +108,10 @@ impl Components {
         match self {
             Components::Header(c) => Box::new(c),
             Components::ServerPreview(c) => Box::new(c),
+            Components::TextInput(c) => Box::new(c),
             Components::TextLabel(c) => Box::new(c),
             Components::ServerListConnected(c) => Box::new(c),
             Components::ServerListDisconnected(c) => Box::new(c),
-            Components::CreateServerForm(c) => Box::new(c),
         }
     }
 }
@@ -301,6 +308,7 @@ pub enum UserEvent {
     ServerListStatus(ServerListStatus),
     #[allow(dead_code)]
     Error(String),
+    Refresh,
     Empty,
 }
 
